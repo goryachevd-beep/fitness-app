@@ -6,14 +6,18 @@ const FIT_API = 'https://www.googleapis.com/fitness/v1/users/me/dataset:aggregat
 
 const SYNC_FLAG = 'googlefit_sync_pending';
 
-let cachedProviderToken: string | null = null;
+const PROVIDER_TOKEN_KEY = 'googlefit_provider_token';
 
 export function setCachedProviderToken(token: string | null) {
-  cachedProviderToken = token;
+  if (token) {
+    sessionStorage.setItem(PROVIDER_TOKEN_KEY, token);
+  } else {
+    sessionStorage.removeItem(PROVIDER_TOKEN_KEY);
+  }
 }
 
 export function getCachedProviderToken(): string | null {
-  return cachedProviderToken;
+  return sessionStorage.getItem(PROVIDER_TOKEN_KEY);
 }
 
 export function initiateGoogleFitAuth() {
