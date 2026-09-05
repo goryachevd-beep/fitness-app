@@ -179,8 +179,13 @@ export default function Dashboard({ onStartWorkout }: { onStartWorkout: () => vo
     setStepsSyncing(true);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
-      const providerToken = sessionData.session?.provider_token ?? getCachedProviderToken();
+      const sessionToken = sessionData.session?.provider_token ?? null;
+      const cachedToken = getCachedProviderToken();
+      console.log('[handleStepsSync] session.provider_token =', sessionToken);
+      console.log('[handleStepsSync] getCachedProviderToken() =', cachedToken);
+      const providerToken = sessionToken ?? cachedToken;
       if (providerToken) {
+        console.log('[handleStepsSync] branch: using', sessionToken ? 'real session token' : 'cached token');
         try {
           const result = await fetchStepsForRange(providerToken);
           setLogs((prev) => mergeStepsIntoLogs(prev, result.perDay));
@@ -188,12 +193,14 @@ export default function Dashboard({ onStartWorkout }: { onStartWorkout: () => vo
         } catch (err) {
           const message = err instanceof Error ? err.message : '';
           if (message.includes('403') || message.includes('insufficient') || message.includes('PERMISSION_DENIED') || message.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT')) {
+            console.log('[handleStepsSync] branch: API 403/permission error -> re-auth via initiateGoogleFitAuth');
             initiateGoogleFitAuth();
             return;
           }
           throw err;
         }
       } else {
+        console.log('[handleStepsSync] branch: neither token present -> initiateGoogleFitAuth');
         initiateGoogleFitAuth();
       }
     } catch (e) {
