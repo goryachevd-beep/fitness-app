@@ -51,6 +51,7 @@ export function useAuthUser() {
       await supabase.from('profiles').upsert(
         {
           id: authUser.id,
+          name: fullName ?? authUser.email ?? 'Athlete',
           role: 'athlete',
           full_name: fullName,
           avatar_url: avatarUrl,
