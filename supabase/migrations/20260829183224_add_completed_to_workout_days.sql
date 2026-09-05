@@ -1,0 +1,1 @@
+ALTER TABLE workout_days ADD COLUMN completed boolean NOT NULL DEFAULT false;
