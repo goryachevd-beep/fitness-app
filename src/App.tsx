@@ -223,7 +223,7 @@ function App() {
             {tab === 'today' && <Dashboard onStartWorkout={() => setTab('workout')} isDemo={isDemo} />}
             {tab === 'nutrition' && <Nutrition isDemo={isDemo} />}
             {tab === 'workout' && <Workout onExerciseComment={handleExerciseComment} isDemo={isDemo} />}
-            {tab === 'metrics' && <Metrics />}
+            {tab === 'metrics' && <Metrics isDemo={isDemo} />}
             {tab === 'chat' && <Chat athlete={user?.profile ?? null} coach={coach} exerciseContext={exerciseContext} isDemo={isDemo} />}
             {tab === 'recipes' && <Recipes />}
           </div>

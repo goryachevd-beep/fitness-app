@@ -6,6 +6,8 @@ import { Card, Loader } from '@/components/ui';
 import { LineChart } from '@/components/LineChart';
 import { formatShortDate, todayISO } from '@/lib/calc';
 import BodyVisualizer, { type MeasurementPoint, SilhouetteCard, PhotoCompare } from '@/components/BodyVisualizer';
+import { useAuthUser } from '@/lib/useAuthUser';
+import { DEMO_METRICS } from '@/lib/demoData';
 
 const BEFORE = 'https://images.pexels.com/photos/8874408/pexels-photo-8874408.jpeg?auto=compress&cs=tinysrgb&h=900&w=600';
 const AFTER = 'https://images.pexels.com/photos/27875415/pexels-photo-27875415.jpeg?auto=compress&cs=tinysrgb&h=900&w=600';
@@ -154,15 +156,23 @@ function BeforeAfter() {
   );
 }
 
-export default function Metrics() {
+export default function Metrics({ isDemo }: { isDemo: boolean }) {
   const [metrics, setMetrics] = useState<CustomMetric[] | null>(null);
   const [logs, setLogs] = useState<MetricLog[]>([]);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [photos, setPhotos] = useState<ProgressPhoto[]>([]);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const { user } = useAuthUser();
 
   async function load() {
+    if (isDemo) {
+      setMetrics(DEMO_METRICS.map((m) => ({ id: m.id, name: m.name, unit: m.unit, is_active: m.is_active, order_index: m.order_index, instruction: m.instruction })));
+      setLogs(DEMO_METRICS.flatMap((m) => m.logs.map((l, i) => ({ id: `${m.id}-log-${i}`, metric_id: m.id, date: l.date, value: l.value }))));
+      setProfile(null);
+      setPhotos([]);
+      return;
+    }
     const [{ data: m }, { data: l }, { data: p }, { data: ph }] = await Promise.all([
       supabase.from('custom_metrics').select('*').order('order_index'),
       supabase.from('metric_logs').select('*').order('date', { ascending: true }),
@@ -177,7 +187,7 @@ export default function Metrics() {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [isDemo]);
 
   const byMetric = useMemo(() => {
     const map: Record<string, MetricLog[]> = {};
@@ -209,6 +219,7 @@ export default function Metrics() {
   }, [metrics, byMetric]);
 
   async function toggle(m: CustomMetric) {
+    if (isDemo) return;
     setMetrics((prev) =>
       prev!.map((x) => (x.id === m.id ? { ...x, is_active: !x.is_active } : x))
     );
@@ -216,6 +227,7 @@ export default function Metrics() {
   }
 
   async function addValue(m: CustomMetric) {
+    if (isDemo) return;
     const raw = draft[m.id];
     const value = Number(raw);
     if (!raw || Number.isNaN(value)) return;
@@ -242,8 +254,9 @@ export default function Metrics() {
         </div>
         <button
           onClick={() => setSettingsOpen(true)}
-          className="flex h-10 w-10 items-center justify-center rounded-xl border border-ink-700 bg-ink-850 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300"
-          title="Настройки замеров"
+          disabled={isDemo}
+          className="flex h-10 w-10 items-center justify-center rounded-xl border border-ink-700 bg-ink-850 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300 disabled:opacity-30 disabled:hover:text-slate-400"
+          title={isDemo ? 'Недоступно в демо-режиме' : 'Настройки замеров'}
         >
           <Settings className="h-5 w-5" />
         </button>
@@ -288,17 +301,20 @@ export default function Metrics() {
                 <input
                   type="number"
                   inputMode="decimal"
+                  disabled={isDemo}
                   value={draft[m.id] ?? ''}
                   onChange={(e) => setDraft((d) => ({ ...d, [m.id]: e.target.value }))}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') addValue(m);
                   }}
-                  placeholder={`Новое значение, ${m.unit}`}
-                  className="flex-1 rounded-lg border border-ink-600 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-brand-500"
+                  placeholder={isDemo ? 'Недоступно в демо-режиме' : `Новое значение, ${m.unit}`}
+                  className="flex-1 rounded-lg border border-ink-600 bg-ink-900 px-3 py-2 text-sm text-white outline-none focus:border-brand-500 disabled:opacity-50"
                 />
                 <button
                   onClick={() => addValue(m)}
-                  className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3.5 py-2 text-sm font-bold text-ink-950 transition-transform hover:scale-105 active:scale-95"
+                  disabled={isDemo}
+                  className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3.5 py-2 text-sm font-bold text-ink-950 transition-transform hover:scale-105 active:scale-95 disabled:opacity-30 disabled:hover:scale-100"
+                  title={isDemo ? 'Недоступно в демо-режиме' : undefined}
                 >
                   <Plus className="h-4 w-4" />
                   Записать
@@ -320,7 +336,7 @@ export default function Metrics() {
       <SilhouetteCard gender={gender} measurements={measurementPoints} />
 
       {/* Before / After Photo Gallery */}
-      <PhotoCompare photos={photos} onPhotoUploaded={load} />
+      {!isDemo && <PhotoCompare photos={photos} onPhotoUploaded={load} />}
 
       <SettingsModal
         open={settingsOpen}

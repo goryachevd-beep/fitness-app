@@ -71,12 +71,24 @@ export function useAuthUser() {
     const authAvatar = pickAuthAvatar(authUser);
     const avatarUrl = profileAvatar ?? authAvatar ?? null;
 
+    let finalDisplayName = displayName;
+    let finalAvatarUrl = avatarUrl;
+    let finalInitials = getInitials(displayName);
+    let finalProfile = athleteProfile;
+
+    if (authUser?.email === 'demo@forma-app.com') {
+      finalDisplayName = 'DEMO';
+      finalAvatarUrl = null;
+      finalInitials = 'D';
+      finalProfile = null;
+    }
+
     setUser({
-      displayName,
-      avatarUrl,
-      initials: getInitials(displayName),
+      displayName: finalDisplayName,
+      avatarUrl: finalAvatarUrl,
+      initials: finalInitials,
       authUser,
-      profile: athleteProfile,
+      profile: finalProfile,
     });
     setLoading(false);
   }, []);

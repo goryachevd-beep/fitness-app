@@ -51,6 +51,10 @@ export default function Chat({
   useEffect(() => {
     if (isDemo) {
       setThreads(DEMO_THREADS);
+      if (exerciseContext) {
+        const workoutThread = DEMO_THREADS.find((t) => t.category === 'workout');
+        if (workoutThread) { setActiveThread(workoutThread.id); return; }
+      }
       setActiveThread(DEMO_THREADS[0].id);
       return;
     }
@@ -72,7 +76,7 @@ export default function Chat({
 
   useEffect(() => {
     if (isDemo) {
-      setMessages(DEMO_MESSAGES);
+      setMessages(DEMO_MESSAGES.filter((m) => m.thread_id === activeThread));
       return;
     }
     if (!activeThread) return;

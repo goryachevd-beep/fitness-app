@@ -54,11 +54,36 @@ export const DEMO_DAY_EXERCISES: Record<string, DemoExercise[]> = {
 };
 
 export const DEMO_THREADS: ChatThread[] = [
-  { id: 'demo', category: 'workout', title: 'Тренировки' },
+  { id: 'demo-general', category: 'general', title: 'Общий' },
+  { id: 'demo-workout', category: 'workout', title: 'Тренировки' },
+  { id: 'demo-nutrition', category: 'nutrition', title: 'Питание' },
 ];
 
 export const DEMO_MESSAGES: Message[] = [
-  { id: 'd1', thread_id: 'demo', sender_role: 'coach', text: 'На этой неделе держим технику в приседе, не гонимся за весом.', reply_to_text: null, created_at: '2026-08-24T15:40:00Z' },
-  { id: 'd2', thread_id: 'demo', sender_role: 'athlete', text: 'Понял, сделаю акцент на технике.', reply_to_text: null, created_at: '2026-08-24T16:20:00Z' },
-  { id: 'd3', thread_id: 'demo', sender_role: 'coach', text: 'Отлично, продолжай в том же духе!', reply_to_text: null, created_at: '2026-08-25T09:10:00Z' },
+  // Общий
+  { id: 'g1', thread_id: 'demo-general', sender_role: 'coach', text: 'Привет! Добро пожаловать — каждую неделю будем сверять прогресс и корректировать план.', reply_to_text: null, created_at: '2026-08-23T10:00:00Z' },
+  { id: 'g2', thread_id: 'demo-general', sender_role: 'athlete', text: 'Спасибо, готов работать!', reply_to_text: null, created_at: '2026-08-23T10:15:00Z' },
+  // Тренировки
+  { id: 'w1', thread_id: 'demo-workout', sender_role: 'coach', text: 'На этой неделе держим технику в приседе, не гонимся за весом.', reply_to_text: null, created_at: '2026-08-24T15:40:00Z' },
+  { id: 'w2', thread_id: 'demo-workout', sender_role: 'athlete', text: 'Понял, сделаю акцент на технике.', reply_to_text: null, created_at: '2026-08-24T16:20:00Z' },
+  { id: 'w3', thread_id: 'demo-workout', sender_role: 'coach', text: 'Отлично, продолжай в том же духе!', reply_to_text: null, created_at: '2026-08-25T09:10:00Z' },
+  // Питание
+  { id: 'n1', thread_id: 'demo-nutrition', sender_role: 'coach', text: 'На этой неделе держим 2700 ккал — белок 165 г, углеводы 320 г в тренировочные дни.', reply_to_text: null, created_at: '2026-08-24T12:00:00Z' },
+  { id: 'n2', thread_id: 'demo-nutrition', sender_role: 'athlete', text: 'Понял, буду следить за КБЖУ.', reply_to_text: null, created_at: '2026-08-24T12:30:00Z' },
+];
+
+export interface DemoMetric {
+  id: string;
+  name: string;
+  unit: string;
+  is_active: boolean;
+  order_index: number;
+  instruction: string | null;
+  logs: { date: string; value: number }[];
+}
+
+export const DEMO_METRICS: DemoMetric[] = [
+  { id: 'demo-m1', name: 'Талия (по пупку)', unit: 'см', is_active: true, order_index: 0, instruction: 'Измерять утром натощак', logs: [{ date: '2026-06-01', value: 84 }, { date: '2026-07-01', value: 81 }, { date: '2026-08-01', value: 78 }] },
+  { id: 'demo-m2', name: 'Грудь', unit: 'см', is_active: true, order_index: 1, instruction: 'Измерять по самым выступающим точкам', logs: [{ date: '2026-06-01', value: 106 }, { date: '2026-07-01', value: 104 }, { date: '2026-08-01', value: 103 }] },
+  { id: 'demo-m3', name: 'Живот', unit: 'см', is_active: true, order_index: 2, instruction: 'Измерять по самому выступающему месту', logs: [{ date: '2026-06-01', value: 88 }, { date: '2026-07-01', value: 84 }, { date: '2026-08-01', value: 80.5 }] },
 ];
