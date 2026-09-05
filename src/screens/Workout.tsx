@@ -9,6 +9,7 @@ import type { Exercise, PersonalRecord, WorkoutDay, WorkoutSet, WorkoutTemplate,
 import { useAuthUser } from '@/lib/useAuthUser';
 import { Card, Loader, Badge } from '@/components/ui';
 import { epleyE1RM, formatDate, weightFromPercent, youtubeEmbed, todayISO } from '@/lib/calc';
+import { DEMO_WORKOUT_DAYS, DEMO_DAY_EXERCISES } from '@/lib/demoData';
 
 type Mode = 'e1rm' | 'tonnage' | 'kpsh';
 const DEFAULT_REST_SECONDS = 90;
@@ -413,7 +414,7 @@ function SetRow({ set, planWeight, prevWeight, prevReps, prevNotes, locked, onUp
 }
 
 /* ── Main Workout Component ── */
-export default function Workout({ onExerciseComment }: { onExerciseComment?: (exerciseId: string, exerciseTitle: string) => void }) {
+export default function Workout({ onExerciseComment, isDemo }: { onExerciseComment?: (exerciseId: string, exerciseTitle: string) => void; isDemo: boolean }) {
   const [days, setDays] = useState<WorkoutDay[] | null>(null);
   const [allSets, setAllSets] = useState<WorkoutSet[]>([]);
   const [exercises, setExercises] = useState<Record<string, Exercise>>({});
@@ -446,6 +447,15 @@ export default function Workout({ onExerciseComment }: { onExerciseComment?: (ex
   const userId = user?.authUser?.id;
 
   useEffect(() => {
+    if (isDemo) {
+      setDays(DEMO_WORKOUT_DAYS);
+      setAllSets([]);
+      setExercises({});
+      setPrs({});
+      setTemplates([]);
+      setTemplateExercises({});
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -501,7 +511,7 @@ export default function Workout({ onExerciseComment }: { onExerciseComment?: (ex
       }
     })();
     return () => { cancelled = true; };
-  }, [userId]);
+  }, [userId, isDemo]);
 
   const sets = useMemo(() => allSets.filter((s) => s.workout_day_id === activeDay), [allSets, activeDay]);
 
@@ -641,9 +651,11 @@ export default function Workout({ onExerciseComment }: { onExerciseComment?: (ex
       </div>
 
       {/* Start new workout */}
-      <button onClick={() => setStartWorkoutOpen(true)} className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-brand-500 py-4 font-bold text-ink-950 shadow-glow transition-transform hover:scale-[1.02] active:scale-95">
-        <Plus className="h-5 w-5" /> Начать тренировку
-      </button>
+      {!isDemo && (
+        <button onClick={() => setStartWorkoutOpen(true)} className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-brand-500 py-4 font-bold text-ink-950 shadow-glow transition-transform hover:scale-[1.02] active:scale-95">
+          <Plus className="h-5 w-5" /> Начать тренировку
+        </button>
+      )}
 
       {/* Empty state */}
       {days.length === 0 && (
@@ -761,12 +773,13 @@ export default function Workout({ onExerciseComment }: { onExerciseComment?: (ex
           {pastDays.map((d) => {
             const daySets = allSets.filter((s) => s.workout_day_id === d.id);
             const isExpanded = expandedDay === d.id;
+            const demoExes = isDemo ? DEMO_DAY_EXERCISES[d.id] : null;
             const dayExes = new Map<string, WorkoutSet[]>();
             daySets.forEach((s) => { const arr = dayExes.get(s.exercise_id) ?? []; arr.push(s); dayExes.set(s.exercise_id, arr); });
             const totalTonnage = daySets.reduce((sum, s) => sum + (s.weight_kg ? Number(s.weight_kg) * Number(s.reps ?? 0) : 0), 0);
             const totalKpsh = daySets.reduce((sum, s) => sum + (s.reps ?? 0), 0);
-            const exerciseCount = dayExes.size;
-            const isCustomActivity = daySets.length === 0 && d.notes;
+            const exerciseCount = demoExes ? demoExes.length : dayExes.size;
+            const isCustomActivity = !isDemo && daySets.length === 0 && d.notes;
             return (
               <Card key={d.id} className="overflow-hidden">
                 <button onClick={() => setExpandedDay(isExpanded ? null : d.id)} className="flex w-full items-center justify-between p-4 text-left">
@@ -785,7 +798,17 @@ export default function Workout({ onExerciseComment }: { onExerciseComment?: (ex
                   </div>
                   {isExpanded ? <ChevronUp className="h-5 w-5 text-slate-500" /> : <ChevronDown className="h-5 w-5 text-slate-500" />}
                 </button>
-                {isExpanded && !isCustomActivity && (
+                {isExpanded && demoExes && (
+                  <div className="space-y-3 border-t border-ink-700/60 p-4">
+                    {demoExes.map((ex, idx) => (
+                      <div key={idx} className="rounded-xl border border-ink-700/60 bg-ink-900/40 p-3">
+                        <p className="font-semibold text-white">{ex.title}</p>
+                        <p className="mt-1.5 text-xs text-slate-400">{ex.setsSummary}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {isExpanded && !isDemo && !isCustomActivity && (
                   <div className="space-y-3 border-t border-ink-700/60 p-4">
                     {dayExes.size === 0 && <p className="text-sm text-slate-500">Нет записанных подходов</p>}
                     {Array.from(dayExes.entries()).map(([exId, exSets]) => {

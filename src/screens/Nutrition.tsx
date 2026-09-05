@@ -5,6 +5,7 @@ import type { DailyLog, NutritionTargets } from '@/lib/types';
 import { Card, Loader } from '@/components/ui';
 import { LineChart } from '@/components/LineChart';
 import { formatShortDate, todayISO, calcEma } from '@/lib/calc';
+import { DEMO_LOGS, DEMO_TARGETS } from '@/lib/demoData';
 
 type RangeKey = '7D' | '2W' | '1M' | '3M' | 'YTD' | 'All' | 'Custom';
 
@@ -218,7 +219,7 @@ function NutritionModal({ open, onClose, current, onSaved }: { open: boolean; on
   );
 }
 
-export default function Nutrition() {
+export default function Nutrition({ isDemo }: { isDemo: boolean }) {
   const [logs, setLogs] = useState<DailyLog[] | null>(null);
   const [targets, setTargets] = useState<NutritionTargets | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -228,13 +229,18 @@ export default function Nutrition() {
   const [customEnd, setCustomEnd] = useState('');
 
   useEffect(() => {
+    if (isDemo) {
+      setLogs(DEMO_LOGS);
+      setTargets(DEMO_TARGETS);
+      return;
+    }
     (async () => {
       const { data: logData } = await supabase.from('daily_logs').select('*').order('date', { ascending: true });
       const { data: targetData } = await supabase.from('nutrition_targets').select('*').maybeSingle();
       setLogs((logData as DailyLog[]) ?? []);
       setTargets(targetData as NutritionTargets | null);
     })();
-  }, []);
+  }, [isDemo]);
 
   const weightLogs = logs ? logs.filter((l) => l.weight != null) : [];
 
@@ -319,7 +325,7 @@ export default function Nutrition() {
           <h1 className="text-2xl font-extrabold text-white">Питание и вес</h1>
           <p className="mt-0.5 text-sm text-slate-400">КБЖУ, тренд веса и цели от тренера</p>
         </div>
-        <button onClick={() => setSettingsOpen(true)} className="flex h-10 w-10 items-center justify-center rounded-xl border border-ink-700 bg-ink-850 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300" title="Настройки целей">
+        <button onClick={() => setSettingsOpen(true)} disabled={isDemo} className="flex h-10 w-10 items-center justify-center rounded-xl border border-ink-700 bg-ink-850 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300 disabled:opacity-30 disabled:hover:text-slate-400" title={isDemo ? 'Недоступно в демо-режиме' : 'Настройки целей'}>
           <Settings className="h-5 w-5" />
         </button>
       </div>
@@ -331,7 +337,7 @@ export default function Nutrition() {
             <Flame className="h-5 w-5 text-brand-400" />
             <h2 className="text-lg font-bold text-white">Цели на день</h2>
           </div>
-          <button onClick={() => setNutritionOpen(true)} className="flex h-7 w-7 items-center justify-center rounded-lg border border-ink-600 bg-ink-800 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300" title="Записать КБЖУ">
+          <button onClick={() => setNutritionOpen(true)} disabled={isDemo} className="flex h-7 w-7 items-center justify-center rounded-lg border border-ink-600 bg-ink-800 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300 disabled:opacity-30 disabled:hover:text-slate-400" title={isDemo ? 'Недоступно в демо-режиме' : 'Записать КБЖУ'}>
             <Plus className="h-4 w-4" />
           </button>
         </div>

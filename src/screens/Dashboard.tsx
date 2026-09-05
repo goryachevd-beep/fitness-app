@@ -4,8 +4,9 @@ import { supabase } from '@/lib/supabase';
 import type { DailyLog, NutritionTargets, WorkoutDay } from '@/lib/types';
 import { Card, Loader, Toast } from '@/components/ui';
 import { todayISO } from '@/lib/calc';
-import { initiateGoogleFitAuth, trySyncFromSession, fetchStepsForRange, getCachedProviderToken } from '@/lib/googleFit';
+import { initiateGoogleFitAuth, trySyncFromSession, fetchStepsForRange, getCachedProviderToken, SYNC_FLAG } from '@/lib/googleFit';
 import { useAuthUser } from '@/lib/useAuthUser';
+import { DEMO_LOGS, DEMO_TARGETS, DEMO_TODAY_WORKOUT } from '@/lib/demoData';
 
 function mergeStepsIntoLogs(prev: DailyLog[] | null, perDay: { date: string; steps: number }[]): DailyLog[] | null {
   if (!prev) return prev;
@@ -110,7 +111,7 @@ function MiniStat({ icon: Icon, label, value, sub, tint }: { icon: typeof Flame;
   );
 }
 
-export default function Dashboard({ onStartWorkout }: { onStartWorkout: () => void }) {
+export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: () => void; isDemo: boolean }) {
   const { user } = useAuthUser();
   const [logs, setLogs] = useState<DailyLog[] | null>(null);
   const [targets, setTargets] = useState<NutritionTargets | null>(null);
@@ -127,6 +128,12 @@ export default function Dashboard({ onStartWorkout }: { onStartWorkout: () => vo
   }, [toast]);
 
   useEffect(() => {
+    if (isDemo) {
+      setLogs(DEMO_LOGS);
+      setTargets(DEMO_TARGETS);
+      setTodayWorkout(DEMO_TODAY_WORKOUT);
+      return;
+    }
     (async () => {
       const { data: logData } = await supabase.from('daily_logs').select('*').order('date', { ascending: true });
       const { data: targetData } = await supabase.from('nutrition_targets').select('*').maybeSingle();
@@ -164,7 +171,7 @@ export default function Dashboard({ onStartWorkout }: { onStartWorkout: () => vo
         }
       }
     })();
-  }, []);
+  }, [isDemo]);
 
   async function handleSync() {
     setSyncing(true);
@@ -241,17 +248,21 @@ export default function Dashboard({ onStartWorkout }: { onStartWorkout: () => vo
           <h1 className="text-2xl font-extrabold text-white">{user?.displayName ?? 'Гость'}</h1>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="flex items-center gap-2 rounded-xl border border-ink-700 bg-ink-850 px-4 py-3 text-sm font-bold text-slate-200 transition-colors hover:border-brand-500/50 hover:text-brand-300 disabled:opacity-50"
-          >
-            <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Синхронизация...' : 'Синхр. данные'}
-          </button>
+          {!isDemo && (
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="flex items-center gap-2 rounded-xl border border-ink-700 bg-ink-850 px-4 py-3 text-sm font-bold text-slate-200 transition-colors hover:border-brand-500/50 hover:text-brand-300 disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? 'Синхронизация...' : 'Синхр. данные'}
+            </button>
+          )}
           <button
             onClick={onStartWorkout}
-            className="flex items-center gap-2.5 rounded-xl bg-brand-500 px-5 py-3 font-bold text-ink-950 shadow-glow transition-transform hover:scale-[1.03] active:scale-95"
+            disabled={isDemo}
+            className="flex items-center gap-2.5 rounded-xl bg-brand-500 px-5 py-3 font-bold text-ink-950 shadow-glow transition-transform hover:scale-[1.03] active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
+            title={isDemo ? 'Недоступно в демо-режиме' : undefined}
           >
             <Play className="h-4 w-4 fill-ink-950" />
             Старт тренировки
@@ -309,8 +320,9 @@ export default function Dashboard({ onStartWorkout }: { onStartWorkout: () => vo
             </div>
             <button
               onClick={() => setWeightModal(true)}
-              className="flex h-7 w-7 items-center justify-center rounded-lg border border-ink-600 bg-ink-800 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300"
-              title="Записать вес"
+              disabled={isDemo}
+              className="flex h-7 w-7 items-center justify-center rounded-lg border border-ink-600 bg-ink-800 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300 disabled:opacity-30 disabled:hover:text-slate-400"
+              title={isDemo ? 'Недоступно в демо-режиме' : 'Записать вес'}
             >
               <Plus className="h-4 w-4" />
             </button>
@@ -326,9 +338,9 @@ export default function Dashboard({ onStartWorkout }: { onStartWorkout: () => vo
             </div>
             <button
               onClick={handleStepsSync}
-              disabled={stepsSyncing}
+              disabled={stepsSyncing || isDemo}
               className="flex h-7 w-7 items-center justify-center rounded-lg border border-ink-600 bg-ink-800 text-slate-400 transition-colors hover:border-lime-500/50 hover:text-lime-300 disabled:opacity-50"
-              title="Синхронизировать шаги с Google Fit"
+              title={isDemo ? 'Недоступно в демо-режиме' : 'Синхронизировать шаги с Google Fit'}
             >
               <RefreshCw className={`h-4 w-4 ${stepsSyncing ? 'animate-spin' : ''}`} />
             </button>

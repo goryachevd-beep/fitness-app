@@ -4,7 +4,7 @@ import { todayISO } from '@/lib/calc';
 const FITNESS_SCOPE = 'https://www.googleapis.com/auth/fitness.activity.read';
 const FIT_API = 'https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate';
 
-const SYNC_FLAG = 'googlefit_sync_pending';
+export const SYNC_FLAG = 'googlefit_sync_pending';
 
 const PROVIDER_TOKEN_KEY = 'googlefit_provider_token';
 

@@ -24,6 +24,7 @@ import ProfileSettingsModal from '@/components/ProfileSettingsModal';
 
 function SignIn() {
   const [busy, setBusy] = useState(false);
+  const [demoBusy, setDemoBusy] = useState(false);
 
   async function handleSignIn() {
     setBusy(true);
@@ -31,6 +32,15 @@ function SignIn() {
       provider: 'google',
       options: { redirectTo: window.location.origin },
     });
+  }
+
+  async function handleDemoSignIn() {
+    setDemoBusy(true);
+    await supabase.auth.signInWithPassword({
+      email: 'demo@forma-app.com',
+      password: '89022285379',
+    });
+    setDemoBusy(false);
   }
 
   return (
@@ -50,6 +60,14 @@ function SignIn() {
         >
           {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Activity className="h-5 w-5" strokeWidth={2.5} />}
           Войти через Google
+        </button>
+        <button
+          onClick={handleDemoSignIn}
+          disabled={demoBusy}
+          className="flex items-center justify-center gap-2 rounded-xl border border-slate-700 px-6 py-3 text-sm font-semibold text-slate-300 transition-colors hover:border-slate-600 hover:text-slate-200 disabled:opacity-60"
+        >
+          {demoBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          Войти как Гость (Demo)
         </button>
       </div>
     </div>
@@ -86,7 +104,7 @@ function App() {
   const [exerciseContext, setExerciseContext] = useState<{ id: string; title: string } | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
 
-  const { user, loading, reload } = useAuthUser();
+  const { user, loading, reload, isDemo } = useAuthUser();
 
   useEffect(() => {
     supabase
@@ -120,6 +138,11 @@ function App() {
 
   return (
     <div className="min-h-screen bg-ink-950 text-slate-200">
+      {isDemo && (
+        <div className="w-full bg-amber-500/15 px-4 py-2 text-center text-sm font-medium text-amber-300">
+          Демо-режим: только просмотр
+        </div>
+      )}
       <div className="mx-auto flex max-w-6xl">
         {/* Sidebar (desktop) */}
         <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-ink-800 px-5 py-7 lg:flex">
@@ -197,11 +220,11 @@ function App() {
           </header>
 
           <div className="px-5 py-6 lg:px-10 lg:py-8">
-            {tab === 'today' && <Dashboard onStartWorkout={() => setTab('workout')} />}
-            {tab === 'nutrition' && <Nutrition />}
-            {tab === 'workout' && <Workout onExerciseComment={handleExerciseComment} />}
+            {tab === 'today' && <Dashboard onStartWorkout={() => setTab('workout')} isDemo={isDemo} />}
+            {tab === 'nutrition' && <Nutrition isDemo={isDemo} />}
+            {tab === 'workout' && <Workout onExerciseComment={handleExerciseComment} isDemo={isDemo} />}
             {tab === 'metrics' && <Metrics />}
-            {tab === 'chat' && <Chat athlete={user?.profile ?? null} coach={coach} exerciseContext={exerciseContext} />}
+            {tab === 'chat' && <Chat athlete={user?.profile ?? null} coach={coach} exerciseContext={exerciseContext} isDemo={isDemo} />}
             {tab === 'recipes' && <Recipes />}
           </div>
         </main>

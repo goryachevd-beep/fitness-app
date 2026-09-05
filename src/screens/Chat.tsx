@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import type { ChatThread, Message, Profile } from '@/lib/types';
 import { Card, Loader } from '@/components/ui';
 import { formatTime } from '@/lib/calc';
+import { DEMO_THREADS, DEMO_MESSAGES } from '@/lib/demoData';
 
 const CATEGORY_META: Record<
   string,
@@ -32,10 +33,12 @@ export default function Chat({
   athlete,
   coach,
   exerciseContext,
+  isDemo,
 }: {
   athlete: Profile | null;
   coach: Profile | null;
   exerciseContext: { id: string; title: string } | null;
+  isDemo: boolean;
 }) {
   const [threads, setThreads] = useState<ChatThread[] | null>(null);
   const [activeThread, setActiveThread] = useState<string | null>(null);
@@ -46,6 +49,11 @@ export default function Chat({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (isDemo) {
+      setThreads(DEMO_THREADS);
+      setActiveThread(DEMO_THREADS[0].id);
+      return;
+    }
     supabase
       .from('chat_threads')
       .select('*')
@@ -60,9 +68,13 @@ export default function Chat({
           setActiveThread(data[0].id);
         }
       });
-  }, [exerciseContext]);
+  }, [exerciseContext, isDemo]);
 
   useEffect(() => {
+    if (isDemo) {
+      setMessages(DEMO_MESSAGES);
+      return;
+    }
     if (!activeThread) return;
     supabase
       .from('messages')
@@ -70,7 +82,7 @@ export default function Chat({
       .eq('thread_id', activeThread)
       .order('created_at', { ascending: true })
       .then(({ data }) => setMessages((data as Message[]) ?? []));
-  }, [activeThread]);
+  }, [activeThread, isDemo]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -302,12 +314,13 @@ export default function Chat({
                   send();
                 }
               }}
-              placeholder="Сообщение тренеру..."
-              className="flex-1 rounded-xl border border-ink-600 bg-ink-900 px-4 py-2.5 text-sm text-white outline-none focus:border-brand-500"
+              placeholder={isDemo ? 'Недоступно в демо-режиме' : 'Сообщение тренеру...'}
+              disabled={isDemo}
+              className="flex-1 rounded-xl border border-ink-600 bg-ink-900 px-4 py-2.5 text-sm text-white outline-none focus:border-brand-500 disabled:opacity-50"
             />
             <button
               onClick={send}
-              disabled={!draft.trim() || sending}
+              disabled={!draft.trim() || sending || isDemo}
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-500 text-ink-950 transition-transform hover:scale-105 active:scale-95 disabled:opacity-40"
             >
               <Send className="h-5 w-5" />

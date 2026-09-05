@@ -91,5 +91,7 @@ export function useAuthUser() {
     return () => data.subscription.unsubscribe();
   }, [load]);
 
-  return { user, loading, reload: load };
+  const isDemo = user?.authUser?.email === 'demo@forma-app.com';
+
+  return { user, loading, reload: load, isDemo };
 }
