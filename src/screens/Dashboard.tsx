@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Flame, TrendingDown, Footprints, Moon, Play, Plus, X, Check, RefreshCw, Dumbbell, Clock } from 'lucide-react';
+import { Flame, TrendingDown, Footprints, Moon, Play, Plus, X, Check, RefreshCw, Dumbbell, Clock, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { DailyLog, NutritionTargets, WorkoutDay } from '@/lib/types';
 import { Card, Loader, Toast } from '@/components/ui';
@@ -7,6 +7,13 @@ import { todayISO } from '@/lib/calc';
 import { initiateGoogleFitAuth, trySyncFromSession, fetchStepsForRange, getCachedProviderToken, SYNC_FLAG } from '@/lib/googleFit';
 import { useAuthUser } from '@/lib/useAuthUser';
 import { DEMO_LOGS, DEMO_TARGETS, DEMO_TODAY_WORKOUT } from '@/lib/demoData';
+import { MOTIVATIONAL_QUOTES } from '@/lib/motivationalQuotes';
+
+function getDayIndex(date: Date, length: number): number {
+  const epoch = new Date(2026, 0, 1);
+  const daysSinceEpoch = Math.floor((date.getTime() - epoch.getTime()) / 86400000);
+  return ((daysSinceEpoch % length) + length) % length;
+}
 
 function mergeStepsIntoLogs(prev: DailyLog[] | null, perDay: { date: string; steps: number }[]): DailyLog[] | null {
   if (!prev) return prev;
@@ -265,6 +272,8 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Доброе утро' : hour < 18 ? 'Добрый день' : 'Добрый вечер';
 
+  const todayQuote = MOTIVATIONAL_QUOTES[getDayIndex(new Date(), MOTIVATIONAL_QUOTES.length)];
+
   const insightMessage = (() => {
     // 1. Reminder (only after 20:00, only if today's entry is missing something)
     if (hour >= 20 && today.date === todayISO()) {
@@ -353,6 +362,17 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
           <Check className="ml-auto h-6 w-6 text-brand-400" />
         </Card>
       )}
+
+      {/* Мысль дня */}
+      <Card className="flex items-start gap-3 p-4">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-500/15 text-brand-300">
+          <Sparkles className="h-4.5 w-4.5" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Мысль дня</p>
+          <p className="mt-0.5 text-sm font-medium leading-relaxed text-slate-200">{todayQuote}</p>
+        </div>
+      </Card>
 
       {/* Calories summary */}
       <Card className="p-5 sm:p-6">
