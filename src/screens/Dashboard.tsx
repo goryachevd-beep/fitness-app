@@ -173,6 +173,31 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
     })();
   }, [isDemo]);
 
+  async function saveSleep(q: number) {
+    if (isDemo) return;
+    const { data: existing } = await supabase
+      .from('daily_logs')
+      .select('id')
+      .eq('date', todayISO())
+      .maybeSingle();
+    if (existing) {
+      await supabase.from('daily_logs').update({ sleep_quality: q }).eq('id', existing.id);
+    } else {
+      await supabase.from('daily_logs').insert({ date: todayISO(), sleep_quality: q });
+    }
+    setLogs((prev) => {
+      if (!prev) return prev;
+      const updated = [...prev];
+      const last = updated[updated.length - 1];
+      if (last && last.date === todayISO()) {
+        updated[updated.length - 1] = { ...last, sleep_quality: q };
+      } else {
+        updated.push({ id: 'tmp', date: todayISO(), weight: null, steps: 0, sleep_quality: q, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: null, weekly_tdee: null, weekly_target_calories: null });
+      }
+      return updated;
+    });
+  }
+
   async function handleSync() {
     setSyncing(true);
     try {
@@ -349,7 +374,36 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
           <p className="text-sm text-slate-400">Шаги</p>
           <p className="mt-0.5 text-xs text-slate-500">{stepsSyncing ? 'Синхр. Google Fit...' : 'Google Fit'}</p>
         </Card>
-        <MiniStat icon={Moon} label="Сон" value={`${today.sleep_quality ?? '—'}/5`} sub="Zepp" tint="bg-sky-500/15 text-sky-300" />
+        <Card className="p-4">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/15 text-sky-300">
+            <Moon className="h-4.5 w-4.5" />
+          </div>
+          <p className="mt-3 text-2xl font-extrabold text-white">{today.sleep_quality ?? '—'}<span className="text-lg text-slate-500">/5</span></p>
+          <p className="text-sm text-slate-400">Сон</p>
+          <div className="mt-2 flex items-center gap-1.5">
+            {([
+              { q: 5, label: 'Выспался', color: 'bg-emerald-500', ring: 'ring-emerald-400' },
+              { q: 3, label: 'Недоспал', color: 'bg-amber-500', ring: 'ring-amber-400' },
+              { q: 1, label: 'Не выспался', color: 'bg-red-500', ring: 'ring-red-400' },
+            ] as const).map((opt) => (
+              <button
+                key={opt.q}
+                onClick={() => saveSleep(opt.q)}
+                disabled={isDemo}
+                title={opt.label}
+                className={`flex-1 flex flex-col items-center gap-1 rounded-lg border py-1.5 transition-all disabled:opacity-30 ${
+                  today.sleep_quality === opt.q
+                    ? `border-transparent ${opt.color} ring-2 ${opt.ring}`
+                    : 'border-ink-600 bg-ink-800 hover:border-ink-500'
+                }`}
+              >
+                <span className={`h-3 w-3 rounded-full ${opt.color}`} />
+                <span className="text-[10px] font-medium text-slate-300">{opt.label}</span>
+              </button>
+            ))}
+          </div>
+          {isDemo && <p className="mt-1.5 text-xs text-slate-500">Отметь сам</p>}
+        </Card>
       </div>
 
       <WeightModal
