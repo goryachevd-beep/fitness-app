@@ -265,12 +265,53 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Доброе утро' : hour < 18 ? 'Добрый день' : 'Добрый вечер';
 
+  const insightMessage = (() => {
+    // 1. Reminder (only after 20:00, only if today's entry is missing something)
+    if (hour >= 20 && today.date === todayISO()) {
+      const missing: string[] = [];
+      if (today.weight == null) missing.push('вес');
+      if (today.sleep_quality == null) missing.push('сон');
+      if (today.calories === 0) missing.push('калории');
+      if (missing.length > 0) {
+        return `Не забудь отметить ${missing.join(' и ')} сегодня`;
+      }
+    }
+
+    // 2. Weight trend praise (loss of 0.3kg or more)
+    if (emaData.length >= 14 && weeklyDelta <= -0.3) {
+      return `💪 ${Math.abs(weeklyDelta).toFixed(1)} кг за 2 недели — отличная динамика!`;
+    }
+
+    // 3. Streak
+    let streak = 0;
+    for (let i = logs.length - 1; i >= 1; i--) {
+      const cur = new Date(logs[i].date);
+      const prev = new Date(logs[i - 1].date);
+      cur.setHours(0, 0, 0, 0);
+      prev.setHours(0, 0, 0, 0);
+      const diff = Math.round((cur.getTime() - prev.getTime()) / 86400000);
+      if (diff === 1) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    if (streak >= 2) {
+      return `🔥 ${streak + 1} дней подряд с записью — не останавливайся!`;
+    }
+
+    return '';
+  })();
+
   return (
     <div className="animate-fade-up space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="text-sm text-slate-400">{greeting},</p>
           <h1 className="text-2xl font-extrabold text-white">{user?.displayName ?? 'Гость'}</h1>
+          {insightMessage && (
+            <p className="mt-1 text-sm text-brand-300/80">{insightMessage}</p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {!isDemo && (
