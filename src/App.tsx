@@ -10,6 +10,7 @@ import {
   Scale,
   Settings,
   Loader2,
+  LogOut,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Profile } from '@/lib/types';
@@ -106,6 +107,10 @@ function App() {
 
   const { user, loading, reload, isDemo } = useAuthUser();
 
+  async function handleSignOut() {
+    await supabase.auth.signOut();
+  }
+
   useEffect(() => {
     supabase
       .from('profiles')
@@ -188,17 +193,26 @@ function App() {
           </div>
 
           {user && (
-            <button
-              onClick={() => setProfileOpen(true)}
-              className="mt-4 flex w-full items-center gap-3 rounded-xl bg-ink-800/60 p-2.5 text-left transition-colors hover:bg-ink-800"
-            >
-              <Avatar name={displayName} url={avatarUrl} size="sm" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-white">{displayName}</p>
-                <p className="text-xs text-slate-500">Атлет</p>
-              </div>
-              <Settings className="h-4 w-4 shrink-0 text-slate-500" />
-            </button>
+            <div className="mt-4 flex items-center gap-2">
+              <button
+                onClick={() => setProfileOpen(true)}
+                className="flex flex-1 items-center gap-3 rounded-xl bg-ink-800/60 p-2.5 text-left transition-colors hover:bg-ink-800"
+              >
+                <Avatar name={displayName} url={avatarUrl} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-white">{displayName}</p>
+                  <p className="text-xs text-slate-500">Атлет</p>
+                </div>
+                <Settings className="h-4 w-4 shrink-0 text-slate-500" />
+              </button>
+              <button
+                onClick={handleSignOut}
+                title={isDemo ? 'Выйти из демо' : 'Выйти'}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-ink-700 bg-ink-800/60 text-slate-400 transition-colors hover:border-red-500/50 hover:text-red-400"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
           )}
         </aside>
 
@@ -213,9 +227,18 @@ function App() {
               <span className="text-base font-extrabold text-white">ФОРМА</span>
             </div>
             {user && (
-              <button onClick={() => setProfileOpen(true)} className="transition-transform active:scale-95">
-                <Avatar name={displayName} url={avatarUrl} size="sm" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setProfileOpen(true)} className="transition-transform active:scale-95">
+                  <Avatar name={displayName} url={avatarUrl} size="sm" />
+                </button>
+                <button
+                  onClick={handleSignOut}
+                  title={isDemo ? 'Выйти из демо' : 'Выйти'}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-ink-700 bg-ink-800/60 text-slate-400 transition-colors hover:border-red-500/50 hover:text-red-400"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </div>
             )}
           </header>
 
