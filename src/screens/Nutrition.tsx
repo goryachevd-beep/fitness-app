@@ -39,14 +39,15 @@ function rangeEnd(range: RangeKey, lastDate: string, customEnd?: string): string
 }
 
 function Macro({ label, value, target, color }: { label: string; value: number; target: number; color: string }) {
-  const pct = Math.min((value / target) * 100, 100);
+  const v = value ?? 0;
+  const pct = Math.min((v / target) * 100, 100);
   return (
     <div className="flex-1">
       <div className="flex items-baseline justify-between">
         <span className="text-xs font-semibold text-slate-300">{label}</span>
-        <span className="text-xs text-slate-500">{value}/{target}</span>
+        <span className="text-xs text-slate-500">{v}/{target}</span>
       </div>
-      <p className="mt-0.5 text-lg font-extrabold text-white">{value}<span className="ml-0.5 text-xs font-normal text-slate-500">г</span></p>
+      <p className="mt-0.5 text-lg font-extrabold text-white">{v}<span className="ml-0.5 text-xs font-normal text-slate-500">г</span></p>
       <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-ink-700">
         <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: color }} />
       </div>
@@ -277,7 +278,7 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
   const carbTarget = targets ? (targets.mode === 'split' ? (isTrainingDay ? targets.training_carbs : targets.rest_carbs) : targets.training_carbs) : 240;
   const proteinTarget = targets?.protein ?? 160;
   const fatTarget = targets?.fats ?? 70;
-  const calPct = Math.min((today.calories / calTarget) * 100, 100);
+  const calPct = Math.min(((today.calories ?? 0) / calTarget) * 100, 100);
 
   async function toggleDayType(type: 'training' | 'rest') {
     if (isDemo) return;
@@ -317,15 +318,15 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
   const yMin = allValues.length ? Math.min(...allValues) - 1.5 : undefined;
   const yMax = allValues.length ? Math.max(...allValues) + 1.5 : undefined;
 
-  const caloriesData = filteredAllLogs.map((l) => ({ label: formatShortDate(l.date), value: l.calories }));
+  const caloriesData = filteredAllLogs.map((l) => ({ label: formatShortDate(l.date), value: l.calories ?? 0 }));
   const calTargetLine = filteredAllLogs.map(() => calTarget);
-  const stepsData = filteredAllLogs.map((l) => ({ label: formatShortDate(l.date), value: l.steps }));
+  const stepsData = filteredAllLogs.map((l) => ({ label: formatShortDate(l.date), value: l.steps ?? 0 }));
 
-  const avgCalories = filteredAllLogs.length ? Math.round(filteredAllLogs.reduce((s, l) => s + l.calories, 0) / filteredAllLogs.length) : 0;
-  const avgProtein = filteredAllLogs.length ? Math.round(filteredAllLogs.reduce((s, l) => s + l.proteins, 0) / filteredAllLogs.length) : 0;
-  const avgFat = filteredAllLogs.length ? Math.round(filteredAllLogs.reduce((s, l) => s + l.fats, 0) / filteredAllLogs.length) : 0;
-  const avgCarbs = filteredAllLogs.length ? Math.round(filteredAllLogs.reduce((s, l) => s + l.carbs, 0) / filteredAllLogs.length) : 0;
-  const avgSteps = filteredAllLogs.length ? Math.round(filteredAllLogs.reduce((s, l) => s + l.steps, 0) / filteredAllLogs.length) : 0;
+  const avgCalories = filteredAllLogs.length ? Math.round(filteredAllLogs.reduce((s, l) => s + (l.calories ?? 0), 0) / filteredAllLogs.length) : 0;
+  const avgProtein = filteredAllLogs.length ? Math.round(filteredAllLogs.reduce((s, l) => s + (l.proteins ?? 0), 0) / filteredAllLogs.length) : 0;
+  const avgFat = filteredAllLogs.length ? Math.round(filteredAllLogs.reduce((s, l) => s + (l.fats ?? 0), 0) / filteredAllLogs.length) : 0;
+  const avgCarbs = filteredAllLogs.length ? Math.round(filteredAllLogs.reduce((s, l) => s + (l.carbs ?? 0), 0) / filteredAllLogs.length) : 0;
+  const avgSteps = filteredAllLogs.length ? Math.round(filteredAllLogs.reduce((s, l) => s + (l.steps ?? 0), 0) / filteredAllLogs.length) : 0;
 
   async function logWeight(w: number) {
     const { data: existing } = await supabase.from('daily_logs').select('id, weight_ema').eq('date', todayISO()).maybeSingle();
@@ -401,8 +402,8 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
 
         <div className="mt-4 flex items-end justify-between">
           <div>
-            <p className="text-4xl font-extrabold text-white">{today.calories.toLocaleString('ru-RU')}<span className="ml-1.5 text-lg font-semibold text-slate-500">/ {calTarget} ккал</span></p>
-            <p className="mt-1 text-sm text-slate-400">{today.calories > calTarget ? `Перебор на ${today.calories - calTarget} ккал` : `Осталось ${calTarget - today.calories} ккал`}</p>
+            <p className="text-4xl font-extrabold text-white">{(today.calories ?? 0).toLocaleString('ru-RU')}<span className="ml-1.5 text-lg font-semibold text-slate-500">/ {calTarget} ккал</span></p>
+            <p className="mt-1 text-sm text-slate-400">{(today.calories ?? 0) > calTarget ? `Перебор на ${(today.calories ?? 0) - calTarget} ккал` : `Осталось ${calTarget - (today.calories ?? 0)} ккал`}</p>
           </div>
           <span className="text-sm font-bold text-brand-400">{calPct.toFixed(0)}%</span>
         </div>
@@ -410,9 +411,9 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
           <div className="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-400 transition-all duration-700" style={{ width: `${calPct}%` }} />
         </div>
         <div className="mt-5 flex gap-4 sm:gap-6">
-          <Macro label="Белки" value={today.proteins} target={proteinTarget} color="#34d399" />
-          <Macro label="Жиры" value={today.fats} target={fatTarget} color="#f59e0b" />
-          <Macro label="Углеводы" value={today.carbs} target={carbTarget} color="#38bdf8" />
+          <Macro label="Белки" value={today.proteins ?? 0} target={proteinTarget} color="#34d399" />
+          <Macro label="Жиры" value={today.fats ?? 0} target={fatTarget} color="#f59e0b" />
+          <Macro label="Углеводы" value={today.carbs ?? 0} target={carbTarget} color="#38bdf8" />
         </div>
       </Card>
 
@@ -538,7 +539,7 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
     <NutritionModal
       open={nutritionOpen}
       onClose={() => setNutritionOpen(false)}
-      current={{ calories: today.calories, proteins: today.proteins, fats: today.fats, carbs: today.carbs }}
+      current={{ calories: today.calories ?? 0, proteins: today.proteins ?? 0, fats: today.fats ?? 0, carbs: today.carbs ?? 0 }}
       onSaved={(v) => {
         setLogs((prev) => {
           if (!prev) return prev;
