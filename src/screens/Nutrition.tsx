@@ -318,15 +318,20 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
   const yMin = allValues.length ? Math.min(...allValues) - 1.5 : undefined;
   const yMax = allValues.length ? Math.max(...allValues) + 1.5 : undefined;
 
-  const caloriesData = filteredAllLogs.map((l) => ({ label: formatShortDate(l.date), value: l.calories ?? 0 }));
-  const calTargetLine = filteredAllLogs.map(() => calTarget);
-  const stepsData = filteredAllLogs.map((l) => ({ label: formatShortDate(l.date), value: l.steps ?? 0 }));
+  const historyLogs = useMemo(() => {
+    const today = todayISO();
+    return filteredAllLogs.filter((l) => l.date < today);
+  }, [filteredAllLogs]);
 
-  const avgCalories = filteredAllLogs.length ? Math.round(filteredAllLogs.reduce((s, l) => s + (l.calories ?? 0), 0) / filteredAllLogs.length) : 0;
-  const avgProtein = filteredAllLogs.length ? Math.round(filteredAllLogs.reduce((s, l) => s + (l.proteins ?? 0), 0) / filteredAllLogs.length) : 0;
-  const avgFat = filteredAllLogs.length ? Math.round(filteredAllLogs.reduce((s, l) => s + (l.fats ?? 0), 0) / filteredAllLogs.length) : 0;
-  const avgCarbs = filteredAllLogs.length ? Math.round(filteredAllLogs.reduce((s, l) => s + (l.carbs ?? 0), 0) / filteredAllLogs.length) : 0;
-  const avgSteps = filteredAllLogs.length ? Math.round(filteredAllLogs.reduce((s, l) => s + (l.steps ?? 0), 0) / filteredAllLogs.length) : 0;
+  const caloriesData = historyLogs.map((l) => ({ label: formatShortDate(l.date), value: l.calories ?? 0 }));
+  const calTargetLine = historyLogs.map(() => calTarget);
+  const stepsData = historyLogs.map((l) => ({ label: formatShortDate(l.date), value: l.steps ?? 0 }));
+
+  const avgCalories = historyLogs.length ? Math.round(historyLogs.reduce((s, l) => s + (l.calories ?? 0), 0) / historyLogs.length) : 0;
+  const avgProtein = historyLogs.length ? Math.round(historyLogs.reduce((s, l) => s + (l.proteins ?? 0), 0) / historyLogs.length) : 0;
+  const avgFat = historyLogs.length ? Math.round(historyLogs.reduce((s, l) => s + (l.fats ?? 0), 0) / historyLogs.length) : 0;
+  const avgCarbs = historyLogs.length ? Math.round(historyLogs.reduce((s, l) => s + (l.carbs ?? 0), 0) / historyLogs.length) : 0;
+  const avgSteps = historyLogs.length ? Math.round(historyLogs.reduce((s, l) => s + (l.steps ?? 0), 0) / historyLogs.length) : 0;
 
   async function logWeight(w: number) {
     const { data: existing } = await supabase.from('daily_logs').select('id, weight_ema').eq('date', todayISO()).maybeSingle();
@@ -492,7 +497,7 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
           </div>
           <div>
             <p className="text-xs text-slate-500">Дней в периоде</p>
-            <p className="text-xl font-extrabold text-white">{filteredAllLogs.length}</p>
+            <p className="text-xl font-extrabold text-white">{historyLogs.length}</p>
           </div>
         </div>
         <div className="mt-4">
