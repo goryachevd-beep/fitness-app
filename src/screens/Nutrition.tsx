@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Flame, Settings, X, Check, Scale, Plus, Footprints } from 'lucide-react';
+import { Flame, Settings, X, Check, Scale, Footprints } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { DailyLog, NutritionTargets } from '@/lib/types';
 import { Card, Loader } from '@/components/ui';
@@ -36,23 +36,6 @@ function rangeStart(range: RangeKey, lastDate: string, customStart?: string, cus
 function rangeEnd(range: RangeKey, lastDate: string, customEnd?: string): string {
   if (range === 'Custom' && customEnd) return customEnd;
   return lastDate;
-}
-
-function Macro({ label, value, target, color }: { label: string; value: number; target: number; color: string }) {
-  const v = value ?? 0;
-  const pct = Math.min((v / target) * 100, 100);
-  return (
-    <div className="flex-1">
-      <div className="flex items-baseline justify-between">
-        <span className="text-xs font-semibold text-slate-300">{label}</span>
-        <span className="text-xs text-slate-500">{v}/{target}</span>
-      </div>
-      <p className="mt-0.5 text-lg font-extrabold text-white">{v}<span className="ml-0.5 text-xs font-normal text-slate-500">г</span></p>
-      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-ink-700">
-        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: color }} />
-      </div>
-    </div>
-  );
 }
 
 function TargetsModal({ open, onClose, targets, onSaved }: { open: boolean; onClose: () => void; targets: NutritionTargets | null; onSaved: (t: NutritionTargets) => void }) {
@@ -150,82 +133,10 @@ function TargetsModal({ open, onClose, targets, onSaved }: { open: boolean; onCl
   );
 }
 
-function NutritionModal({ open, onClose, current, onSaved }: { open: boolean; onClose: () => void; current: { calories: number; proteins: number; fats: number; carbs: number } | null; onSaved: (v: { calories: number; proteins: number; fats: number; carbs: number }) => void }) {
-  const [calories, setCalories] = useState(0);
-  const [proteins, setProteins] = useState(0);
-  const [fats, setFats] = useState(0);
-  const [carbs, setCarbs] = useState(0);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setCalories(current?.calories ?? 0);
-      setProteins(current?.proteins ?? 0);
-      setFats(current?.fats ?? 0);
-      setCarbs(current?.carbs ?? 0);
-    }
-  }, [open, current]);
-
-  if (!open) return null;
-
-  async function save() {
-    setSaving(true);
-    const { data: existing } = await supabase.from('daily_logs').select('id').eq('date', todayISO()).maybeSingle();
-    if (existing) {
-      await supabase.from('daily_logs').update({ calories, proteins, fats, carbs }).eq('id', existing.id);
-    } else {
-      await supabase.from('daily_logs').insert({ date: todayISO(), calories, proteins, fats, carbs });
-    }
-    onSaved({ calories, proteins, fats, carbs });
-    setSaving(false);
-    onClose();
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl border border-ink-700 bg-ink-900 p-5" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Flame className="h-5 w-5 text-brand-300" />
-            <h3 className="text-lg font-bold text-white">Записать КБЖУ за сегодня</h3>
-          </div>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-300"><X className="h-5 w-5" /></button>
-        </div>
-
-        <div className="mt-4 space-y-3">
-          <div>
-            <label className="text-xs font-semibold text-slate-400">Калории, ккал</label>
-            <input type="number" value={calories} onChange={(e) => setCalories(Number(e.target.value))} className="mt-1 w-full rounded-xl border border-ink-600 bg-ink-950 px-4 py-3 text-lg font-bold text-white outline-none focus:border-brand-500" />
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-slate-400">Белки, г</label>
-              <input type="number" value={proteins} onChange={(e) => setProteins(Number(e.target.value))} className="mt-1 w-full rounded-xl border border-ink-600 bg-ink-950 px-4 py-3 font-bold text-white outline-none focus:border-brand-500" />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-400">Жиры, г</label>
-              <input type="number" value={fats} onChange={(e) => setFats(Number(e.target.value))} className="mt-1 w-full rounded-xl border border-ink-600 bg-ink-950 px-4 py-3 font-bold text-white outline-none focus:border-brand-500" />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-400">Углеводы, г</label>
-              <input type="number" value={carbs} onChange={(e) => setCarbs(Number(e.target.value))} className="mt-1 w-full rounded-xl border border-ink-600 bg-ink-950 px-4 py-3 font-bold text-white outline-none focus:border-brand-500" />
-            </div>
-          </div>
-        </div>
-
-        <button onClick={save} disabled={saving} className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 py-3 font-bold text-ink-950 transition-transform hover:scale-[1.02] active:scale-95 disabled:opacity-40">
-          <Check className="h-4 w-4" /> Сохранить
-        </button>
-      </div>
-    </div>
-  );
-}
-
 export default function Nutrition({ isDemo }: { isDemo: boolean }) {
   const [logs, setLogs] = useState<DailyLog[] | null>(null);
   const [targets, setTargets] = useState<NutritionTargets | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [nutritionOpen, setNutritionOpen] = useState(false);
   const [range, setRange] = useState<RangeKey>('1M');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
@@ -275,11 +186,6 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
   const today = logs[logs.length - 1];
   const isTrainingDay = dayType === 'training';
   const calTarget = targets ? (targets.mode === 'split' ? (isTrainingDay ? targets.training_calories : targets.rest_calories) : targets.uniform_calories) : today.weekly_target_calories ?? 2350;
-  const carbTarget = targets ? (targets.mode === 'split' ? (isTrainingDay ? targets.training_carbs : targets.rest_carbs) : targets.training_carbs) : 240;
-  const proteinTarget = targets?.protein ?? 160;
-  const fatTarget = targets?.fats ?? 70;
-  const calPct = Math.min(((today.calories ?? 0) / calTarget) * 100, 100);
-
   async function toggleDayType(type: 'training' | 'rest') {
     if (isDemo) return;
     setDayType(type);
@@ -367,60 +273,6 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
           <Settings className="h-5 w-5" />
         </button>
       </div>
-
-      {/* Calorie targets section */}
-      <Card className="p-5 sm:p-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Flame className="h-5 w-5 text-brand-400" />
-            <h2 className="text-lg font-bold text-white">Цели на день</h2>
-          </div>
-          <button onClick={() => setNutritionOpen(true)} disabled={isDemo} className="flex h-7 w-7 items-center justify-center rounded-lg border border-ink-600 bg-ink-800 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300 disabled:opacity-30 disabled:hover:text-slate-400" title={isDemo ? 'Недоступно в демо-режиме' : 'Записать КБЖУ'}>
-            <Plus className="h-4 w-4" />
-          </button>
-        </div>
-        {targets && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {targets.mode === 'split' ? (
-              <>
-                <button
-                  onClick={() => toggleDayType('training')}
-                  className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors ${isTrainingDay ? 'border-brand-500/50 bg-brand-500/20 text-brand-300' : 'border-ink-700 bg-ink-800/50 text-slate-400 hover:text-slate-300'}`}
-                >
-                  Тренировочный: {targets.training_calories} ккал
-                </button>
-                <button
-                  onClick={() => toggleDayType('rest')}
-                  className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors ${!isTrainingDay ? 'border-slate-400/50 bg-slate-500/20 text-slate-200' : 'border-ink-700 bg-ink-800/50 text-slate-400 hover:text-slate-300'}`}
-                >
-                  Отдых: {targets.rest_calories} ккал
-                </button>
-              </>
-            ) : (
-              <span className="rounded-lg border border-brand-500/30 bg-brand-500/10 px-3 py-1.5 text-sm font-semibold text-brand-300">Единая цель: {targets.uniform_calories} ккал</span>
-            )}
-            <span className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-sm font-semibold text-emerald-300">Б: {targets.protein}г</span>
-            <span className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-sm font-semibold text-sky-300">У: {carbTarget}г</span>
-            <span className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-sm font-semibold text-amber-300">Ж: {targets.fats}г</span>
-          </div>
-        )}
-
-        <div className="mt-4 flex items-end justify-between">
-          <div>
-            <p className="text-4xl font-extrabold text-white">{(today.calories ?? 0).toLocaleString('ru-RU')}<span className="ml-1.5 text-lg font-semibold text-slate-500">/ {calTarget} ккал</span></p>
-            <p className="mt-1 text-sm text-slate-400">{(today.calories ?? 0) > calTarget ? `Перебор на ${(today.calories ?? 0) - calTarget} ккал` : `Осталось ${calTarget - (today.calories ?? 0)} ккал`}</p>
-          </div>
-          <span className="text-sm font-bold text-brand-400">{calPct.toFixed(0)}%</span>
-        </div>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-ink-700">
-          <div className="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-400 transition-all duration-700" style={{ width: `${calPct}%` }} />
-        </div>
-        <div className="mt-5 flex gap-4 sm:gap-6">
-          <Macro label="Белки" value={today.proteins ?? 0} target={proteinTarget} color="#34d399" />
-          <Macro label="Жиры" value={today.fats ?? 0} target={fatTarget} color="#f59e0b" />
-          <Macro label="Углеводы" value={today.carbs ?? 0} target={carbTarget} color="#38bdf8" />
-        </div>
-      </Card>
 
       {/* Shared range selector for all history charts */}
       <Card className="p-4">
@@ -541,24 +393,6 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
     </div>
 
     <TargetsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} targets={targets} onSaved={(t) => setTargets(t)} />
-    <NutritionModal
-      open={nutritionOpen}
-      onClose={() => setNutritionOpen(false)}
-      current={{ calories: today.calories ?? 0, proteins: today.proteins ?? 0, fats: today.fats ?? 0, carbs: today.carbs ?? 0 }}
-      onSaved={(v) => {
-        setLogs((prev) => {
-          if (!prev) return prev;
-          const updated = [...prev];
-          const last = updated[updated.length - 1];
-          if (last && last.date === todayISO()) {
-            updated[updated.length - 1] = { ...last, calories: v.calories, proteins: v.proteins, fats: v.fats, carbs: v.carbs };
-          } else {
-            updated.push({ id: 'tmp', date: todayISO(), weight: null, steps: 0, sleep_quality: null, calories: v.calories, proteins: v.proteins, fats: v.fats, carbs: v.carbs, weight_ema: null, weekly_tdee: null, weekly_target_calories: null, day_type: null });
-          }
-          return updated;
-        });
-      }}
-    />
   </>
   );
 }
