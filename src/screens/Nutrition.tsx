@@ -261,6 +261,13 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
     return logs.filter((l) => l.date >= startDate && l.date <= endDate);
   }, [logs, startDate, endDate]);
 
+  useEffect(() => {
+    if (!logs || logs.length === 0) return;
+    const t = logs[logs.length - 1].day_type;
+    if (t === 'rest') setDayType('rest');
+    else setDayType('training');
+  }, [logs]);
+
   if (!logs) return <Loader />;
   if (logs.length === 0) return <p className="py-20 text-center text-slate-500">Дневник пуст</p>;
 
@@ -271,12 +278,6 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
   const proteinTarget = targets?.protein ?? 160;
   const fatTarget = targets?.fats ?? 70;
   const calPct = Math.min((today.calories / calTarget) * 100, 100);
-
-  useEffect(() => {
-    const t = today.day_type;
-    if (t === 'rest') setDayType('rest');
-    else setDayType('training');
-  }, [today.day_type]);
 
   async function toggleDayType(type: 'training' | 'rest') {
     if (isDemo) return;
