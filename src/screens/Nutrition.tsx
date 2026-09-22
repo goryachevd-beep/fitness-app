@@ -173,6 +173,11 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
     return logs.filter((l) => l.date >= startDate && l.date <= endDate);
   }, [logs, startDate, endDate]);
 
+  const historyLogs = useMemo(() => {
+    const today = todayISO();
+    return filteredAllLogs.filter((l) => l.date < today);
+  }, [filteredAllLogs]);
+
   useEffect(() => {
     if (!logs || logs.length === 0) return;
     const t = logs[logs.length - 1].day_type;
@@ -223,11 +228,6 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
   const allValues = [...weightData.map((d) => d.value), ...emaData];
   const yMin = allValues.length ? Math.min(...allValues) - 1.5 : undefined;
   const yMax = allValues.length ? Math.max(...allValues) + 1.5 : undefined;
-
-  const historyLogs = useMemo(() => {
-    const today = todayISO();
-    return filteredAllLogs.filter((l) => l.date < today);
-  }, [filteredAllLogs]);
 
   const caloriesData = historyLogs.map((l) => ({ label: formatShortDate(l.date), value: l.calories ?? 0 }));
   const calTargetLine = historyLogs.map(() => calTarget);
