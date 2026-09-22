@@ -550,14 +550,26 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
               onClick={handleStepsSync}
               disabled={stepsSyncing || isDemo}
               className="flex h-7 w-7 items-center justify-center rounded-lg border border-ink-600 bg-ink-800 text-slate-400 transition-colors hover:border-lime-500/50 hover:text-lime-300 disabled:opacity-50"
-              title={isDemo ? 'Недоступно в демо-режиме' : 'Синхронизировать шаги с Google Fit'}
+              title={isDemo ? 'Недоступно в демо-режиме' : 'Синхронизировать шаги'}
             >
               <RefreshCw className={`h-4 w-4 ${stepsSyncing ? 'animate-spin' : ''}`} />
             </button>
           </div>
-          <p className="mt-3 text-2xl font-extrabold text-white">{today.steps.toLocaleString('ru-RU')}</p>
+          <p className="mt-3 text-2xl font-extrabold text-white">{(() => {
+            const yDate = yesterdayISO();
+            const last7 = logs.filter((l) => l.date <= yDate).slice(-7);
+            const avg = last7.length ? Math.round(last7.reduce((s, l) => s + l.steps, 0) / last7.length) : 0;
+            return avg.toLocaleString('ru-RU');
+          })()}</p>
           <p className="text-sm text-slate-400">Шаги</p>
-          <p className="mt-0.5 text-xs text-slate-500">{stepsSyncing ? 'Синхр. Google Fit...' : 'Google Fit'}</p>
+          <p className="mt-0.5 text-xs text-slate-500">{(() => {
+            const days = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+            const yDate = yesterdayISO();
+            const end = new Date(yDate + 'T00:00:00');
+            const start = new Date(yDate + 'T00:00:00');
+            start.setDate(start.getDate() - 6);
+            return `Среднее за 7 дней (${days[start.getDay()]} – ${days[end.getDay()]})`;
+          })()}</p>
         </Card>
         <Card className="p-4">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/15 text-sky-300">
