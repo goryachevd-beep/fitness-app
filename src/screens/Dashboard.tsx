@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Flame, TrendingDown, Footprints, Moon, Play, Plus, X, Check, RefreshCw, Dumbbell, Clock, Sparkles } from 'lucide-react';
+import { Flame, TrendingDown, Footprints, Moon, Play, Plus, X, Check, RefreshCw, Dumbbell, Clock, Sparkles, History, Target, Zap, Award } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { DailyLog, NutritionTargets, WorkoutDay } from '@/lib/types';
 import { Card, Loader, Toast } from '@/components/ui';
-import { todayISO } from '@/lib/calc';
+import { todayISO, yesterdayISO } from '@/lib/calc';
 import { initiateGoogleFitAuth, trySyncFromSession, fetchStepsForRange, getCachedProviderToken, SYNC_FLAG } from '@/lib/googleFit';
 import { useAuthUser } from '@/lib/useAuthUser';
 import { DEMO_LOGS, DEMO_TARGETS, DEMO_TODAY_WORKOUT } from '@/lib/demoData';
@@ -253,13 +253,6 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
   if (logs.length === 0) return <p className="py-20 text-center text-slate-500">Дневник пуст</p>;
 
   const today = logs[logs.length - 1];
-  const target = targets
-    ? targets.mode === 'split'
-      ? targets.training_calories
-      : targets.uniform_calories
-    : today.weekly_target_calories ?? 2350;
-  const calPct = Math.min((today.calories / target) * 100, 100);
-
   const weightLogs = logs.filter((l) => l.weight != null);
   const emaData = weightLogs.slice(-30).map((l) => Number(l.weight_ema ?? l.weight));
   const lastEma = emaData[emaData.length - 1] ?? 0;
@@ -374,28 +367,159 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
         </div>
       </Card>
 
-      {/* Calories summary */}
-      <Card className="p-5 sm:p-6">
-        <div className="flex items-center gap-2">
-          <Flame className="h-5 w-5 text-brand-400" />
-          <h2 className="text-lg font-bold text-white">Калории сегодня</h2>
-        </div>
-        <div className="mt-4 flex items-end justify-between">
-          <div>
-            <p className="text-4xl font-extrabold text-white">
-              {today.calories.toLocaleString('ru-RU')}
-              <span className="ml-1.5 text-lg font-semibold text-slate-500">/ {target} ккал</span>
-            </p>
-            <p className="mt-1 text-sm text-slate-400">
-              {today.calories > target ? `Перебор на ${today.calories - target} ккал` : `Осталось ${target - today.calories} ккал`}
-            </p>
+      {/* Итог за вчера — Yesterday's Summary */}
+      {(() => {
+        const yDate = yesterdayISO();
+        const yLog = logs.find((l) => l.date === yDate) ?? null;
+        const yIsTraining = yLog?.day_type === 'training';
+        const yCalTarget = targets
+          ? targets.mode === 'split'
+            ? yIsTraining ? targets.training_calories : targets.rest_calories
+            : targets.uniform_calories
+          : 2350;
+        const yCarbTarget = targets
+          ? targets.mode === 'split'
+            ? yIsTraining ? targets.training_carbs : targets.rest_carbs
+            : targets.training_carbs
+          : 240;
+        const yProteinTarget = targets?.protein ?? 160;
+        const yFatTarget = targets?.fats ?? 70;
+        const yCalPct = yLog ? Math.min((yLog.calories / yCalTarget) * 100, 100) : 0;
+        const yCalDiff = yLog ? yLog.calories - yCalTarget : 0;
+        const yCalMet = yLog ? Math.abs(yCalDiff) <= 150 : false;
+        const yProteinMet = yLog ? yLog.proteins >= yProteinTarget * 0.9 : false;
+        const yFatMet = yLog ? Math.abs(yLog.fats - yFatTarget) <= 20 : false;
+        const yCarbMet = yLog ? Math.abs(yLog.carbs - yCarbTarget) <= 50 : false;
+        const allMet = yCalMet && yProteinMet && yFatMet && yCarbMet;
+        const yLabel = new Date(yDate + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+
+        return (
+          <Card className="p-5 sm:p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <History className="h-5 w-5 text-brand-400" />
+                <h2 className="text-lg font-bold text-white">Итог за вчера</h2>
+              </div>
+              <span className="text-xs font-medium text-slate-500">{yLabel}</span>
+            </div>
+
+            {yLog ? (
+              <>
+                {/* Calories */}
+                <div className="mt-4 flex items-end justify-between">
+                  <div>
+                    <p className="text-4xl font-extrabold text-white">
+                      {yLog.calories.toLocaleString('ru-RU')}
+                      <span className="ml-1.5 text-lg font-semibold text-slate-500">/ {yCalTarget} ккал</span>
+                    </p>
+                    <p className="mt-1 text-sm text-slate-400">
+                      {yCalDiff > 0 ? `Перебор на ${yCalDiff} ккал` : yCalDiff < 0 ? `Недобор на ${Math.abs(yCalDiff)} ккал` : 'Точно в цель'}
+                    </p>
+                  </div>
+                  <span className="text-sm font-bold text-brand-400">{yCalPct.toFixed(0)}%</span>
+                </div>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-ink-700">
+                  <div className="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-400 transition-all duration-700" style={{ width: `${yCalPct}%` }} />
+                </div>
+
+                {/* Macros */}
+                <div className="mt-5 grid grid-cols-3 gap-4">
+                  <div className="rounded-xl border border-ink-700 bg-ink-850 p-3">
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                      <p className="text-xs font-semibold text-slate-400">Белки</p>
+                    </div>
+                    <p className="mt-1.5 text-lg font-extrabold text-white">{yLog.proteins}<span className="text-sm text-slate-500">/{yProteinTarget}г</span></p>
+                    <p className={`mt-0.5 text-xs font-medium ${yProteinMet ? 'text-emerald-400' : 'text-amber-400'}`}>{yProteinMet ? 'Выполнено' : 'Недовыполнено'}</p>
+                  </div>
+                  <div className="rounded-xl border border-ink-700 bg-ink-850 p-3">
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-sky-400" />
+                      <p className="text-xs font-semibold text-slate-400">Углеводы</p>
+                    </div>
+                    <p className="mt-1.5 text-lg font-extrabold text-white">{yLog.carbs}<span className="text-sm text-slate-500">/{yCarbTarget}г</span></p>
+                    <p className={`mt-0.5 text-xs font-medium ${yCarbMet ? 'text-emerald-400' : 'text-amber-400'}`}>{yCarbMet ? 'Выполнено' : 'Отклонение'}</p>
+                  </div>
+                  <div className="rounded-xl border border-ink-700 bg-ink-850 p-3">
+                    <div className="flex items-center gap-1.5">
+                      <span className="h-2 w-2 rounded-full bg-amber-400" />
+                      <p className="text-xs font-semibold text-slate-400">Жиры</p>
+                    </div>
+                    <p className="mt-1.5 text-lg font-extrabold text-white">{yLog.fats}<span className="text-sm text-slate-500">/{yFatTarget}г</span></p>
+                    <p className={`mt-0.5 text-xs font-medium ${yFatMet ? 'text-emerald-400' : 'text-amber-400'}`}>{yFatMet ? 'Выполнено' : 'Отклонение'}</p>
+                  </div>
+                </div>
+
+                {/* Summary status */}
+                <div className={`mt-4 flex items-center gap-2 rounded-xl border p-3 ${allMet ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-amber-500/30 bg-amber-500/10'}`}>
+                  {allMet ? <Check className="h-4 w-4 text-emerald-400" /> : <Zap className="h-4 w-4 text-amber-400" />}
+                  <p className={`text-sm font-semibold ${allMet ? 'text-emerald-300' : 'text-amber-300'}`}>
+                    {allMet ? 'Цели за вчера успешно выполнены!' : 'Часть целей не достигнута — скорректируйте сегодня'}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <div className="mt-4 flex items-center gap-2 rounded-xl border border-ink-700 bg-ink-850 p-4">
+                <History className="h-4 w-4 text-slate-500" />
+                <p className="text-sm text-slate-400">Нет данных за вчера. Отметьте питание на странице «Питание и вес».</p>
+              </div>
+            )}
+          </Card>
+        );
+      })()}
+
+      {/* Цели на неделю от тренера — Coach's Weekly Targets */}
+      {targets && (
+        <Card className="p-5 sm:p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Target className="h-5 w-5 text-brand-400" />
+              <h2 className="text-lg font-bold text-white">Цели на неделю от тренера</h2>
+            </div>
+            <span className="flex items-center gap-1.5 rounded-lg border border-brand-500/30 bg-brand-500/10 px-3 py-1.5 text-xs font-bold text-brand-300">
+              <Award className="h-3.5 w-3.5" />
+              Удержание веса / Рекомпозиция
+            </span>
           </div>
-          <span className="text-sm font-bold text-brand-400">{calPct.toFixed(0)}%</span>
-        </div>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-ink-700">
-          <div className="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-400 transition-all duration-700" style={{ width: `${calPct}%` }} />
-        </div>
-      </Card>
+
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {/* Rest day */}
+            <div className="rounded-xl border border-ink-700 bg-ink-850 p-4">
+              <div className="flex items-center gap-2">
+                <Moon className="h-4 w-4 text-slate-400" />
+                <p className="text-sm font-bold text-slate-300">День отдыха</p>
+              </div>
+              <div className="mt-3 flex items-end justify-between">
+                <div>
+                  <p className="text-2xl font-extrabold text-white">{targets.mode === 'split' ? targets.rest_calories : targets.uniform_calories}<span className="ml-1 text-sm text-slate-500">ккал</span></p>
+                  <p className="mt-1 text-xs text-slate-400">Углеводы: {targets.mode === 'split' ? targets.rest_carbs : targets.training_carbs}г</p>
+                </div>
+                <span className="rounded-lg bg-slate-500/15 px-2.5 py-1 text-xs font-semibold text-slate-300">Отдых</span>
+              </div>
+            </div>
+            {/* Training day */}
+            <div className="rounded-xl border border-brand-500/30 bg-brand-500/5 p-4">
+              <div className="flex items-center gap-2">
+                <Dumbbell className="h-4 w-4 text-brand-400" />
+                <p className="text-sm font-bold text-brand-300">Тренировочный день</p>
+              </div>
+              <div className="mt-3 flex items-end justify-between">
+                <div>
+                  <p className="text-2xl font-extrabold text-white">{targets.mode === 'split' ? targets.training_calories : targets.uniform_calories}<span className="ml-1 text-sm text-slate-500">ккал</span></p>
+                  <p className="mt-1 text-xs text-slate-400">Углеводы: {targets.training_carbs}г</p>
+                </div>
+                <span className="rounded-lg bg-brand-500/15 px-2.5 py-1 text-xs font-semibold text-brand-300">Тренировка</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Constant macros */}
+          <div className="mt-3 flex flex-wrap gap-3">
+            <span className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-sm font-semibold text-emerald-300">Белки: min {targets.protein}г</span>
+            <span className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-sm font-semibold text-amber-300">Жиры: ~{targets.fats}г</span>
+          </div>
+        </Card>
+      )}
 
       {/* Quick stats */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
