@@ -127,6 +127,8 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
   const [stepsSyncing, setStepsSyncing] = useState(false);
   const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
   const [todayWorkout, setTodayWorkout] = useState<WorkoutDay | null>(null);
+  const [showSleepCheckin, setShowSleepCheckin] = useState(false);
+  const [sleepSaving, setSleepSaving] = useState(false);
 
   useEffect(() => {
     if (!toast) return;
@@ -179,6 +181,24 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
       }
     })();
   }, [isDemo]);
+
+  useEffect(() => {
+    if (!logs || isDemo) return;
+    const todayLog = logs.find((l) => l.date === todayISO());
+    if (todayLog && todayLog.sleep_quality == null) {
+      setShowSleepCheckin(true);
+    }
+  }, [logs, isDemo]);
+
+  async function handleSleepCheckin(q: number) {
+    setSleepSaving(true);
+    try {
+      await saveSleep(q);
+    } finally {
+      setSleepSaving(false);
+      setShowSleepCheckin(false);
+    }
+  }
 
   async function saveSleep(q: number) {
     if (isDemo) return;
@@ -621,6 +641,39 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
           });
         }}
       />
+
+      {showSleepCheckin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-ink-700 bg-ink-900 p-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/15 text-sky-300">
+                <Moon className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">{user?.displayName ? `${user.displayName}, как ты сегодня спал?` : 'Привет! Как ты сегодня спал?'}</h3>
+                <p className="mt-0.5 text-sm text-slate-400">Отметь пожалуйста качество твоего сна</p>
+              </div>
+            </div>
+            <div className="mt-5 flex items-center gap-2">
+              {([
+                { q: 5, label: 'Выспался', color: 'bg-emerald-500', ring: 'ring-emerald-400' },
+                { q: 3, label: 'Недоспал', color: 'bg-amber-500', ring: 'ring-amber-400' },
+                { q: 1, label: 'Плохо спал', color: 'bg-red-500', ring: 'ring-red-400' },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.q}
+                  onClick={() => handleSleepCheckin(opt.q)}
+                  disabled={sleepSaving}
+                  className="flex-1 flex flex-col items-center gap-2 rounded-xl border border-ink-600 bg-ink-800 py-3 transition-all hover:border-ink-500 disabled:opacity-50"
+                >
+                  <span className={`h-4 w-4 rounded-full ${opt.color}`} />
+                  <span className="text-xs font-medium text-slate-300">{opt.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && <Toast message={toast.message} tone={toast.tone} />}
     </div>
