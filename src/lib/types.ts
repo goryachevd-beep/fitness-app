@@ -30,6 +30,7 @@ export interface DailyLog {
   weight_ema: number | null;
   weekly_tdee: number | null;
   weekly_target_calories: number | null;
+  day_type: 'training' | 'rest' | null;
 }
 
 export interface Exercise {

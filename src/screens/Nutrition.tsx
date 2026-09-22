@@ -228,6 +228,7 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
   const [range, setRange] = useState<RangeKey>('1M');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
+  const [dayType, setDayType] = useState<'training' | 'rest'>('training');
 
   useEffect(() => {
     if (isDemo) {
@@ -264,12 +265,40 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
   if (logs.length === 0) return <p className="py-20 text-center text-slate-500">Дневник пуст</p>;
 
   const today = logs[logs.length - 1];
-  const isTrainingDay = true;
+  const isTrainingDay = dayType === 'training';
   const calTarget = targets ? (targets.mode === 'split' ? (isTrainingDay ? targets.training_calories : targets.rest_calories) : targets.uniform_calories) : today.weekly_target_calories ?? 2350;
   const carbTarget = targets ? (targets.mode === 'split' ? (isTrainingDay ? targets.training_carbs : targets.rest_carbs) : targets.training_carbs) : 240;
   const proteinTarget = targets?.protein ?? 160;
   const fatTarget = targets?.fats ?? 70;
   const calPct = Math.min((today.calories / calTarget) * 100, 100);
+
+  useEffect(() => {
+    const t = today.day_type;
+    if (t === 'rest') setDayType('rest');
+    else setDayType('training');
+  }, [today.day_type]);
+
+  async function toggleDayType(type: 'training' | 'rest') {
+    if (isDemo) return;
+    setDayType(type);
+    const { data: existing } = await supabase.from('daily_logs').select('id').eq('date', todayISO()).maybeSingle();
+    if (existing) {
+      await supabase.from('daily_logs').update({ day_type: type }).eq('id', existing.id);
+    } else {
+      await supabase.from('daily_logs').insert({ date: todayISO(), day_type: type });
+    }
+    setLogs((prev) => {
+      if (!prev) return prev;
+      const updated = [...prev];
+      const last = updated[updated.length - 1];
+      if (last && last.date === todayISO()) {
+        updated[updated.length - 1] = { ...last, day_type: type };
+      } else {
+        updated.push({ id: 'tmp', date: todayISO(), weight: null, steps: 0, sleep_quality: null, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: null, weekly_tdee: null, weekly_target_calories: null, day_type: type });
+      }
+      return updated;
+    });
+  }
 
   const weightData = filteredLogs.map((l) => ({ label: formatShortDate(l.date), value: Number(l.weight) }));
   const emaData = filteredLogs.map((l) => Number(l.weight_ema ?? l.weight));
@@ -313,7 +342,7 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
       if (last && last.date === todayISO()) {
         updated[updated.length - 1] = { ...last, weight: w, weight_ema: newEma };
       } else {
-        updated.push({ id: 'tmp', date: todayISO(), weight: w, steps: 0, sleep_quality: null, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: newEma, weekly_tdee: null, weekly_target_calories: null });
+        updated.push({ id: 'tmp', date: todayISO(), weight: w, steps: 0, sleep_quality: null, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: newEma, weekly_tdee: null, weekly_target_calories: null, day_type: null });
       }
       return updated;
     });
@@ -347,14 +376,24 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
           <div className="mt-3 flex flex-wrap gap-2">
             {targets.mode === 'split' ? (
               <>
-                <span className="rounded-lg border border-brand-500/30 bg-brand-500/10 px-3 py-1.5 text-sm font-semibold text-brand-300">Тренировочный: {targets.training_calories} ккал</span>
-                <span className="rounded-lg border border-slate-500/30 bg-slate-500/10 px-3 py-1.5 text-sm font-semibold text-slate-300">Отдых: {targets.rest_calories} ккал</span>
+                <button
+                  onClick={() => toggleDayType('training')}
+                  className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors ${isTrainingDay ? 'border-brand-500/50 bg-brand-500/20 text-brand-300' : 'border-ink-700 bg-ink-800/50 text-slate-400 hover:text-slate-300'}`}
+                >
+                  Тренировочный: {targets.training_calories} ккал
+                </button>
+                <button
+                  onClick={() => toggleDayType('rest')}
+                  className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors ${!isTrainingDay ? 'border-slate-400/50 bg-slate-500/20 text-slate-200' : 'border-ink-700 bg-ink-800/50 text-slate-400 hover:text-slate-300'}`}
+                >
+                  Отдых: {targets.rest_calories} ккал
+                </button>
               </>
             ) : (
               <span className="rounded-lg border border-brand-500/30 bg-brand-500/10 px-3 py-1.5 text-sm font-semibold text-brand-300">Единая цель: {targets.uniform_calories} ккал</span>
             )}
             <span className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-sm font-semibold text-emerald-300">Б: {targets.protein}г</span>
-            <span className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-sm font-semibold text-sky-300">У: {targets.mode === 'split' ? `${targets.rest_carbs}/${targets.training_carbs}г` : `${targets.training_carbs}г`}</span>
+            <span className="rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-sm font-semibold text-sky-300">У: {carbTarget}г</span>
             <span className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-sm font-semibold text-amber-300">Ж: {targets.fats}г</span>
           </div>
         )}
@@ -507,7 +546,7 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
           if (last && last.date === todayISO()) {
             updated[updated.length - 1] = { ...last, calories: v.calories, proteins: v.proteins, fats: v.fats, carbs: v.carbs };
           } else {
-            updated.push({ id: 'tmp', date: todayISO(), weight: null, steps: 0, sleep_quality: null, calories: v.calories, proteins: v.proteins, fats: v.fats, carbs: v.carbs, weight_ema: null, weekly_tdee: null, weekly_target_calories: null });
+            updated.push({ id: 'tmp', date: todayISO(), weight: null, steps: 0, sleep_quality: null, calories: v.calories, proteins: v.proteins, fats: v.fats, carbs: v.carbs, weight_ema: null, weekly_tdee: null, weekly_target_calories: null, day_type: null });
           }
           return updated;
         });

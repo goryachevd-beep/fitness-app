@@ -1,9 +1,9 @@
 import type { DailyLog, NutritionTargets, WorkoutDay, ChatThread, Message } from '@/lib/types';
 
 export const DEMO_LOGS: DailyLog[] = [
-  { id: 'demo-1', date: '2026-08-24', weight: 78.4, steps: 9200, sleep_quality: 4, calories: 2850, proteins: 165, fats: 85, carbs: 320, weight_ema: 78.6, weekly_tdee: 2900, weekly_target_calories: 2700 },
-  { id: 'demo-2', date: '2026-08-25', weight: 78.2, steps: 11400, sleep_quality: 5, calories: 2700, proteins: 170, fats: 80, carbs: 300, weight_ema: 78.5, weekly_tdee: 2900, weekly_target_calories: 2700 },
-  { id: 'demo-3', date: '2026-08-26', weight: 78.1, steps: 8700, sleep_quality: 3, calories: 2950, proteins: 160, fats: 90, carbs: 340, weight_ema: 78.4, weekly_tdee: 2900, weekly_target_calories: 2700 },
+  { id: 'demo-1', date: '2026-08-24', weight: 78.4, steps: 9200, sleep_quality: 4, calories: 2850, proteins: 165, fats: 85, carbs: 320, weight_ema: 78.6, weekly_tdee: 2900, weekly_target_calories: 2700, day_type: 'training' },
+  { id: 'demo-2', date: '2026-08-25', weight: 78.2, steps: 11400, sleep_quality: 5, calories: 2700, proteins: 170, fats: 80, carbs: 300, weight_ema: 78.5, weekly_tdee: 2900, weekly_target_calories: 2700, day_type: 'rest' },
+  { id: 'demo-3', date: '2026-08-26', weight: 78.1, steps: 8700, sleep_quality: 3, calories: 2950, proteins: 160, fats: 90, carbs: 340, weight_ema: 78.4, weekly_tdee: 2900, weekly_target_calories: 2700, day_type: 'training' },
 ];
 
 export const DEMO_TARGETS: NutritionTargets = {

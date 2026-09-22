@@ -23,7 +23,7 @@ function mergeStepsIntoLogs(prev: DailyLog[] | null, perDay: { date: string; ste
     if (idx >= 0) {
       updated[idx] = { ...updated[idx], steps: day.steps };
     } else {
-      updated.push({ id: 'tmp', date: day.date, weight: null, steps: day.steps, sleep_quality: null, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: null, weekly_tdee: null, weekly_target_calories: null });
+      updated.push({ id: 'tmp', date: day.date, weight: null, steps: day.steps, sleep_quality: null, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: null, weekly_tdee: null, weekly_target_calories: null, day_type: null });
     }
   }
   updated.sort((a, b) => a.date.localeCompare(b.date));
@@ -159,7 +159,7 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
           if (last && last.date === todayISO()) {
             updated[updated.length - 1] = { ...last, steps: syncedSteps };
           } else {
-            updated.push({ id: 'tmp', date: todayISO(), weight: null, steps: syncedSteps, sleep_quality: null, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: null, weekly_tdee: null, weekly_target_calories: null });
+            updated.push({ id: 'tmp', date: todayISO(), weight: null, steps: syncedSteps, sleep_quality: null, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: null, weekly_tdee: null, weekly_target_calories: null, day_type: null });
           }
           return updated;
         });
@@ -199,7 +199,7 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
       if (last && last.date === todayISO()) {
         updated[updated.length - 1] = { ...last, sleep_quality: q };
       } else {
-        updated.push({ id: 'tmp', date: todayISO(), weight: null, steps: 0, sleep_quality: q, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: null, weekly_tdee: null, weekly_target_calories: null });
+        updated.push({ id: 'tmp', date: todayISO(), weight: null, steps: 0, sleep_quality: q, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: null, weekly_tdee: null, weekly_target_calories: null, day_type: null });
       }
       return updated;
     });
@@ -479,7 +479,7 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
             if (last && last.date === todayISO()) {
               updated[updated.length - 1] = { ...last, weight: w };
             } else {
-              updated.push({ id: 'tmp', date: todayISO(), weight: w, steps: 0, sleep_quality: null, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: w, weekly_tdee: null, weekly_target_calories: null });
+              updated.push({ id: 'tmp', date: todayISO(), weight: w, steps: 0, sleep_quality: null, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: w, weekly_tdee: null, weekly_target_calories: null, day_type: null });
             }
             return updated;
           });
