@@ -77,7 +77,7 @@ function TargetsModal({ open, onClose, targets, onSaved }: { open: boolean; onCl
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
-      <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-ink-700 bg-ink-900 p-5" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-ink-700 bg-ink-900 p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Settings className="h-5 w-5 text-brand-300" />
@@ -320,6 +320,7 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
   }
 
   return (
+    <>
     <div className="animate-fade-up space-y-6">
       <div className="flex items-start justify-between">
         <div>
@@ -491,25 +492,27 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
         </div>
       </Card>
 
-      <TargetsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} targets={targets} onSaved={(t) => setTargets(t)} />
-      <NutritionModal
-        open={nutritionOpen}
-        onClose={() => setNutritionOpen(false)}
-        current={{ calories: today.calories, proteins: today.proteins, fats: today.fats, carbs: today.carbs }}
-        onSaved={(v) => {
-          setLogs((prev) => {
-            if (!prev) return prev;
-            const updated = [...prev];
-            const last = updated[updated.length - 1];
-            if (last && last.date === todayISO()) {
-              updated[updated.length - 1] = { ...last, calories: v.calories, proteins: v.proteins, fats: v.fats, carbs: v.carbs };
-            } else {
-              updated.push({ id: 'tmp', date: todayISO(), weight: null, steps: 0, sleep_quality: null, calories: v.calories, proteins: v.proteins, fats: v.fats, carbs: v.carbs, weight_ema: null, weekly_tdee: null, weekly_target_calories: null });
-            }
-            return updated;
-          });
-        }}
-      />
     </div>
+
+    <TargetsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} targets={targets} onSaved={(t) => setTargets(t)} />
+    <NutritionModal
+      open={nutritionOpen}
+      onClose={() => setNutritionOpen(false)}
+      current={{ calories: today.calories, proteins: today.proteins, fats: today.fats, carbs: today.carbs }}
+      onSaved={(v) => {
+        setLogs((prev) => {
+          if (!prev) return prev;
+          const updated = [...prev];
+          const last = updated[updated.length - 1];
+          if (last && last.date === todayISO()) {
+            updated[updated.length - 1] = { ...last, calories: v.calories, proteins: v.proteins, fats: v.fats, carbs: v.carbs };
+          } else {
+            updated.push({ id: 'tmp', date: todayISO(), weight: null, steps: 0, sleep_quality: null, calories: v.calories, proteins: v.proteins, fats: v.fats, carbs: v.carbs, weight_ema: null, weekly_tdee: null, weekly_target_calories: null });
+          }
+          return updated;
+        });
+      }}
+    />
+  </>
   );
 }
