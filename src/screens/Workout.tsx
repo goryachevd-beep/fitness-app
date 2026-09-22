@@ -644,7 +644,7 @@ export default function Workout({ onExerciseComment, isDemo }: { onExerciseComme
     <div className="animate-fade-up space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-extrabold text-white">{activeDayObj?.name ?? 'Тренировки'}</h1>
+          <h1 className="text-2xl font-extrabold text-white">{activeDayObj?.name ?? activeDayObj?.day_name ?? activeDayObj?.title ?? 'Тренировки'}</h1>
           <p className="mt-0.5 text-sm text-slate-400">{activeDayObj ? (activeDayObj.date ? formatDate(activeDayObj.date) : 'Сегодня') : 'Программа от тренера'}</p>
         </div>
         <button onClick={() => setSettingsOpen(true)} className="flex h-10 w-10 items-center justify-center rounded-xl border border-ink-700 bg-ink-850 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300" title="Настройки"><Settings className="h-5 w-5" /></button>
@@ -670,7 +670,7 @@ export default function Workout({ onExerciseComment, isDemo }: { onExerciseComme
       {activeDayObj && grouped.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-sm font-semibold text-brand-300"><span className={`h-2 w-2 rounded-full ${activeDayObj.completed ? 'bg-emerald-400' : 'bg-brand-400 animate-pulse'}`} /> {activeDayObj.completed ? 'Завершено' : (activeDayObj?.name ?? 'Активная тренировка')}</div>
+            <div className="flex items-center gap-2 text-sm font-semibold text-brand-300"><span className={`h-2 w-2 rounded-full ${activeDayObj.completed ? 'bg-emerald-400' : 'bg-brand-400 animate-pulse'}`} /> {activeDayObj.completed ? 'Завершено' : (activeDayObj?.name ?? activeDayObj?.day_name ?? 'Активная тренировка')}</div>
             {activeDayObj.completed && <span className="rounded-md bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-400">Сохранено</span>}
           </div>
           {grouped.map(([exId, exSets]) => {
@@ -760,7 +760,7 @@ export default function Workout({ onExerciseComment, isDemo }: { onExerciseComme
         <Card className="flex items-center gap-4 p-5">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-500/15"><Clock className="h-6 w-6 text-brand-300" /></div>
           <div>
-            <p className="font-bold text-white">{activeDayObj.name ?? 'Активность'}</p>
+            <p className="font-bold text-white">{activeDayObj.name ?? activeDayObj.day_name ?? 'Активность'}</p>
             <p className="text-sm text-slate-400">{activeDayObj.notes}</p>
           </div>
         </Card>
@@ -786,7 +786,7 @@ export default function Workout({ onExerciseComment, isDemo }: { onExerciseComme
                   <div className="flex items-center gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-ink-700">{isCustomActivity ? <Clock className="h-5 w-5 text-slate-400" /> : <Calendar className="h-5 w-5 text-slate-400" />}</div>
                     <div>
-                      <p className="font-bold text-white">{d.name ?? 'Тренировка'}</p>
+                      <p className="font-bold text-white">{d.name ?? d.day_name ?? d.title ?? 'Тренировка'}</p>
                       <p className="text-xs text-slate-400">
                         {d.date ? formatDate(d.date) : '—'}
                         {isCustomActivity && d.notes ? ` · ${d.notes}` : ''}
