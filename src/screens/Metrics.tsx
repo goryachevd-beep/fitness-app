@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Ruler, Info, Plus, TrendingDown, TrendingUp, Camera, Settings, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { CustomMetric, MetricLog, Profile, ProgressPhoto } from '@/lib/types';
@@ -58,10 +59,10 @@ function SettingsModal({
   onToggle: (m: CustomMetric) => void;
 }) {
   if (!open) return null;
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
       <div
-        className="max-h-[80vh] w-full max-w-md overflow-y-auto rounded-2xl border border-ink-700 bg-ink-900 p-5"
+        className="flex max-h-[90vh] w-full max-w-md flex-col overflow-y-auto rounded-2xl border border-ink-700 bg-ink-900 p-5"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
@@ -99,7 +100,8 @@ function SettingsModal({
           ))}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
