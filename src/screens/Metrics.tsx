@@ -6,6 +6,25 @@ import type { CustomMetric, MetricLog, Profile, ProgressPhoto } from '@/lib/type
 import { Card, Loader } from '@/components/ui';
 import { LineChart } from '@/components/LineChart';
 import { formatShortDate, todayISO } from '@/lib/calc';
+
+type PeriodKey = '7D' | '2W' | '1M' | '3M' | '6M' | 'ALL';
+const PERIOD_OPTIONS: { key: PeriodKey; label: string }[] = [
+  { key: '7D', label: '7 дн' },
+  { key: '2W', label: '2 нед' },
+  { key: '1M', label: '1 мес' },
+  { key: '3M', label: '3 мес' },
+  { key: '6M', label: '6 мес' },
+  { key: 'ALL', label: 'Все' },
+];
+const PERIOD_DAYS: Record<Exclude<PeriodKey, 'ALL'>, number> = { '7D': 7, '2W': 14, '1M': 30, '3M': 90, '6M': 180 };
+
+function periodCutoff(period: PeriodKey): string | null {
+  if (period === 'ALL') return null;
+  const days = PERIOD_DAYS[period];
+  const d = new Date();
+  d.setDate(d.getDate() - (days - 1));
+  return d.toISOString().slice(0, 10);
+}
 import BodyVisualizer, { type MeasurementPoint, SilhouetteCard, PhotoCompare } from '@/components/BodyVisualizer';
 import { useAuthUser } from '@/lib/useAuthUser';
 import { DEMO_METRICS } from '@/lib/demoData';
@@ -165,6 +184,7 @@ export default function Metrics({ isDemo }: { isDemo: boolean }) {
   const [photos, setPhotos] = useState<ProgressPhoto[]>([]);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [period, setPeriod] = useState<PeriodKey>('1M');
   const { user } = useAuthUser();
 
   async function load() {
@@ -199,13 +219,23 @@ export default function Metrics({ isDemo }: { isDemo: boolean }) {
     return map;
   }, [logs]);
 
+  const cutoff = useMemo(() => periodCutoff(period), [period]);
+  const byMetricFiltered = useMemo(() => {
+    if (!cutoff) return byMetric;
+    const map: Record<string, MetricLog[]> = {};
+    for (const [id, entries] of Object.entries(byMetric)) {
+      map[id] = entries.filter((l) => l.date >= cutoff);
+    }
+    return map;
+  }, [byMetric, cutoff]);
+
   const measurementPoints: MeasurementPoint[] = useMemo(() => {
     if (!metrics) return [];
     return metrics
       .filter((m) => m.is_active)
       .map((m) => {
         const pos = METRIC_POSITIONS[m.name];
-        const entries = byMetric[m.id] ?? [];
+        const entries = byMetricFiltered[m.id] ?? [];
         const start = entries.length > 0 ? Number(entries[0].value) : null;
         const current = entries.length > 0 ? Number(entries[entries.length - 1].value) : null;
         return {
@@ -218,7 +248,7 @@ export default function Metrics({ isDemo }: { isDemo: boolean }) {
           start,
         };
       });
-  }, [metrics, byMetric]);
+  }, [metrics, byMetricFiltered]);
 
   async function toggle(m: CustomMetric) {
     if (isDemo) return;
@@ -264,10 +294,23 @@ export default function Metrics({ isDemo }: { isDemo: boolean }) {
         </button>
       </div>
 
+      {/* Period selector */}
+      <div className="flex rounded-xl border border-ink-700 bg-ink-850 p-0.5">
+        {PERIOD_OPTIONS.map((opt) => (
+          <button
+            key={opt.key}
+            onClick={() => setPeriod(opt.key)}
+            className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-bold transition-all ${period === opt.key ? 'bg-brand-500 text-ink-950 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
       {/* Active metric charts */}
       <div className="grid gap-4 lg:grid-cols-2">
         {active.map((m) => {
-          const data = (byMetric[m.id] ?? []).map((l) => ({
+          const data = (byMetricFiltered[m.id] ?? []).map((l) => ({
             label: formatShortDate(l.date),
             value: Number(l.value),
           }));
