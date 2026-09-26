@@ -105,6 +105,175 @@ function WeightModal({
   );
 }
 
+function NutritionModal({
+  open,
+  onClose,
+  defaultDate,
+  existing,
+  isDemo,
+  onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  defaultDate: string;
+  existing: DailyLog | null;
+  isDemo: boolean;
+  onSaved: (date: string, patch: { calories: number; proteins: number; fats: number; carbs: number }) => void;
+}) {
+  const [date, setDate] = useState(defaultDate);
+  const [calories, setCalories] = useState('');
+  const [proteins, setProteins] = useState('');
+  const [fats, setFats] = useState('');
+  const [carbs, setCarbs] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setDate(defaultDate);
+    setCalories(existing ? String(existing.calories) : '');
+    setProteins(existing ? String(existing.proteins) : '');
+    setFats(existing ? String(existing.fats) : '');
+    setCarbs(existing ? String(existing.carbs) : '');
+  }, [open, defaultDate, existing]);
+
+  if (!open) return null;
+
+  async function save() {
+    const c = Number(calories) || 0;
+    const p = Number(proteins) || 0;
+    const f = Number(fats) || 0;
+    const cb = Number(carbs) || 0;
+    setSaving(true);
+    const { data: row } = await supabase.from('daily_logs').select('id').eq('date', date).maybeSingle();
+    if (row) {
+      await supabase.from('daily_logs').update({ calories: c, proteins: p, fats: f, carbs: cb }).eq('id', row.id);
+    } else {
+      await supabase.from('daily_logs').insert({ date, calories: c, proteins: p, fats: f, carbs: cb });
+    }
+    onSaved(date, { calories: c, proteins: p, fats: f, carbs: cb });
+    setSaving(false);
+    onClose();
+  }
+
+  const inputCls = 'w-full rounded-xl border border-ink-600 bg-ink-950 px-4 py-3 text-lg font-bold text-white outline-none focus:border-brand-500';
+  const labelCls = 'mb-1 text-xs font-semibold text-slate-400';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl border border-ink-700 bg-ink-900 p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-bold text-white">Ввод КБЖУ и данных</h3>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-300"><X className="h-5 w-5" /></button>
+        </div>
+
+        <div className="mt-4">
+          <label className={labelCls}>Дата</label>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>Калории, ккал</label>
+            <input type="number" inputMode="numeric" value={calories} onChange={(e) => setCalories(e.target.value)} placeholder="0" className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Белки, г</label>
+            <input type="number" inputMode="numeric" value={proteins} onChange={(e) => setProteins(e.target.value)} placeholder="0" className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Жиры, г</label>
+            <input type="number" inputMode="numeric" value={fats} onChange={(e) => setFats(e.target.value)} placeholder="0" className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Углеводы, г</label>
+            <input type="number" inputMode="numeric" value={carbs} onChange={(e) => setCarbs(e.target.value)} placeholder="0" className={inputCls} />
+          </div>
+        </div>
+
+        <div className="mt-5 flex gap-3">
+          <button onClick={onClose} disabled={saving} className="flex-1 rounded-xl border border-ink-600 bg-ink-800 py-3 font-bold text-slate-200 hover:bg-ink-700 disabled:opacity-50">Отмена</button>
+          <button onClick={save} disabled={saving || isDemo} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-500 py-3 font-bold text-ink-950 transition-transform hover:scale-[1.02] active:scale-95 disabled:opacity-40">
+            {saving ? <><RefreshCw className="h-4 w-4 animate-spin" /> Сохранение...</> : <><Check className="h-4 w-4" /> Сохранить</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StepsModal({
+  open,
+  onClose,
+  defaultDate,
+  existing,
+  isDemo,
+  onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  defaultDate: string;
+  existing: DailyLog | null;
+  isDemo: boolean;
+  onSaved: (date: string, steps: number) => void;
+}) {
+  const [date, setDate] = useState(defaultDate);
+  const [steps, setSteps] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setDate(defaultDate);
+    setSteps(existing && existing.steps ? String(existing.steps) : '');
+  }, [open, defaultDate, existing]);
+
+  if (!open) return null;
+
+  async function save() {
+    const s = Number(steps) || 0;
+    setSaving(true);
+    const { data: row } = await supabase.from('daily_logs').select('id').eq('date', date).maybeSingle();
+    if (row) {
+      await supabase.from('daily_logs').update({ steps: s }).eq('id', row.id);
+    } else {
+      await supabase.from('daily_logs').insert({ date, steps: s });
+    }
+    onSaved(date, s);
+    setSaving(false);
+    onClose();
+  }
+
+  const inputCls = 'w-full rounded-xl border border-ink-600 bg-ink-950 px-4 py-3 text-lg font-bold text-white outline-none focus:border-brand-500';
+  const labelCls = 'mb-1 text-xs font-semibold text-slate-400';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+      <div className="w-full max-w-sm rounded-2xl border border-ink-700 bg-ink-900 p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-bold text-white">Ввод шагов</h3>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-300"><X className="h-5 w-5" /></button>
+        </div>
+
+        <div className="mt-4">
+          <label className={labelCls}>Дата</label>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+        </div>
+
+        <div className="mt-4">
+          <label className={labelCls}>Шаги</label>
+          <input type="number" inputMode="numeric" value={steps} onChange={(e) => setSteps(e.target.value)} placeholder="0" autoFocus className={inputCls} />
+        </div>
+
+        <div className="mt-5 flex gap-3">
+          <button onClick={onClose} disabled={saving} className="flex-1 rounded-xl border border-ink-600 bg-ink-800 py-3 font-bold text-slate-200 hover:bg-ink-700 disabled:opacity-50">Отмена</button>
+          <button onClick={save} disabled={saving || isDemo} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-500 py-3 font-bold text-ink-950 transition-transform hover:scale-[1.02] active:scale-95 disabled:opacity-40">
+            {saving ? <><RefreshCw className="h-4 w-4 animate-spin" /> Сохранение...</> : <><Check className="h-4 w-4" /> Сохранить</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MiniStat({ icon: Icon, label, value, sub, tint }: { icon: typeof Flame; label: string; value: string; sub?: string; tint: string }) {
   return (
     <Card className="p-4">
@@ -123,6 +292,8 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
   const [logs, setLogs] = useState<DailyLog[] | null>(null);
   const [targets, setTargets] = useState<NutritionTargets | null>(null);
   const [weightModal, setWeightModal] = useState(false);
+  const [nutritionModal, setNutritionModal] = useState(false);
+  const [stepsModal, setStepsModal] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [stepsSyncing, setStepsSyncing] = useState(false);
   const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
@@ -420,7 +591,17 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
                 <History className="h-5 w-5 text-brand-400" />
                 <h2 className="text-lg font-bold text-white">Итог за вчера</h2>
               </div>
-              <span className="text-xs font-medium text-slate-500">{yLabel}</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setNutritionModal(true)}
+                  disabled={isDemo}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-ink-600 bg-ink-800 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300 disabled:opacity-30"
+                  title={isDemo ? 'Недоступно в демо-режиме' : 'Ввести КБЖУ'}
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+                <span className="text-xs font-medium text-slate-500">{yLabel}</span>
+              </div>
             </div>
 
             {yLog ? (
@@ -566,14 +747,24 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-lime-500/15 text-lime-400">
               <Footprints className="h-4.5 w-4.5" />
             </div>
-            <button
-              onClick={handleStepsSync}
-              disabled={stepsSyncing || isDemo}
-              className="flex h-7 w-7 items-center justify-center rounded-lg border border-ink-600 bg-ink-800 text-slate-400 transition-colors hover:border-lime-500/50 hover:text-lime-300 disabled:opacity-50"
-              title={isDemo ? 'Недоступно в демо-режиме' : 'Синхронизировать шаги'}
-            >
-              <RefreshCw className={`h-4 w-4 ${stepsSyncing ? 'animate-spin' : ''}`} />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setStepsModal(true)}
+                disabled={isDemo}
+                className="flex h-7 w-7 items-center justify-center rounded-lg border border-ink-600 bg-ink-800 text-slate-400 transition-colors hover:border-lime-500/50 hover:text-lime-300 disabled:opacity-30"
+                title={isDemo ? 'Недоступно в демо-режиме' : 'Ввести шаги'}
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+              <button
+                onClick={handleStepsSync}
+                disabled={stepsSyncing || isDemo}
+                className="flex h-7 w-7 items-center justify-center rounded-lg border border-ink-600 bg-ink-800 text-slate-400 transition-colors hover:border-lime-500/50 hover:text-lime-300 disabled:opacity-50"
+                title={isDemo ? 'Недоступно в демо-режиме' : 'Синхронизировать шаги'}
+              >
+                <RefreshCw className={`h-4 w-4 ${stepsSyncing ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
           </div>
           <p className="mt-3 text-2xl font-extrabold text-white">{(() => {
             const yDate = yesterdayISO();
@@ -622,6 +813,50 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
           {isDemo && <p className="mt-1.5 text-xs text-slate-500">Отметь сам</p>}
         </Card>
       </div>
+
+      <NutritionModal
+        open={nutritionModal}
+        onClose={() => setNutritionModal(false)}
+        defaultDate={yesterdayISO()}
+        existing={logs.find((l) => l.date === yesterdayISO()) ?? null}
+        isDemo={isDemo}
+        onSaved={(savedDate, patch) => {
+          setLogs((prev) => {
+            if (!prev) return prev;
+            const updated = [...prev];
+            const idx = updated.findIndex((l) => l.date === savedDate);
+            if (idx >= 0) {
+              updated[idx] = { ...updated[idx], ...patch };
+            } else {
+              updated.push({ id: 'tmp', date: savedDate, weight: null, steps: 0, sleep_quality: null, weight_ema: null, weekly_tdee: null, weekly_target_calories: null, day_type: null, ...patch });
+              updated.sort((a, b) => a.date.localeCompare(b.date));
+            }
+            return updated;
+          });
+        }}
+      />
+
+      <StepsModal
+        open={stepsModal}
+        onClose={() => setStepsModal(false)}
+        defaultDate={todayISO()}
+        existing={logs.find((l) => l.date === todayISO()) ?? null}
+        isDemo={isDemo}
+        onSaved={(savedDate, s) => {
+          setLogs((prev) => {
+            if (!prev) return prev;
+            const updated = [...prev];
+            const idx = updated.findIndex((l) => l.date === savedDate);
+            if (idx >= 0) {
+              updated[idx] = { ...updated[idx], steps: s };
+            } else {
+              updated.push({ id: 'tmp', date: savedDate, weight: null, steps: s, sleep_quality: null, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: null, weekly_tdee: null, weekly_target_calories: null, day_type: null });
+              updated.sort((a, b) => a.date.localeCompare(b.date));
+            }
+            return updated;
+          });
+        }}
+      />
 
       <WeightModal
         open={weightModal}
