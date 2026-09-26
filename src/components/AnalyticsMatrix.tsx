@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Moon, Footprints, Scale, Flame, TrendingUp, TrendingDown } from 'lucide-react';
+import { Moon, Footprints, Scale, Flame, TrendingUp, TrendingDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { DailyLog, NutritionTargets } from '@/lib/types';
 import { Card } from '@/components/ui';
 import { LineChart } from '@/components/LineChart';
@@ -24,25 +24,32 @@ const METRIC_OPTIONS: { key: MetricKey; label: string; icon: typeof Moon }[] = [
 
 const PERIOD_LABELS: Record<PeriodKey, string> = { '7D': '7 дн', '2W': '2 нед', '1M': 'мес', '3M': '3 мес' };
 
-function periodStart(period: PeriodKey, lastDate: string): string {
-  const d = new Date(lastDate + 'T00:00:00');
-  if (period === '7D') d.setDate(d.getDate() - 7);
-  else if (period === '2W') d.setDate(d.getDate() - 14);
-  else if (period === '1M') d.setMonth(d.getMonth() - 1);
-  else if (period === '3M') d.setMonth(d.getMonth() - 3);
+const PERIOD_DAYS: Record<PeriodKey, number> = { '7D': 7, '2W': 14, '1M': 30, '3M': 90 };
+
+function shiftDate(iso: string, deltaDays: number): string {
+  const d = new Date(iso + 'T00:00:00');
+  d.setDate(d.getDate() + deltaDays);
   return d.toISOString().slice(0, 10);
 }
 
 export function AnalyticsMatrix({ logs, targets, isDemo }: { logs: DailyLog[]; targets: NutritionTargets | null; isDemo: boolean }) {
   const [period, setPeriod] = useState<PeriodKey>('1M');
   const [metric, setMetric] = useState<MetricKey>('weight');
+  const [periodOffset, setPeriodOffset] = useState(0);
 
-  const lastDate = logs.length ? logs[logs.length - 1].date : new Date().toISOString().slice(0, 10);
-  const startDate = periodStart(period, lastDate);
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const periodLen = PERIOD_DAYS[period];
+  const windowEnd = shiftDate(todayISO, -(periodOffset * periodLen));
+  const windowStart = shiftDate(windowEnd, -(periodLen - 1));
+
+  function changePeriod(p: PeriodKey) {
+    setPeriod(p);
+    setPeriodOffset(0);
+  }
 
   const filteredLogs = useMemo(
-    () => logs.filter((l) => l.date >= startDate && l.date <= lastDate),
-    [logs, startDate, lastDate],
+    () => logs.filter((l) => l.date >= windowStart && l.date <= windowEnd),
+    [logs, windowStart, windowEnd],
   );
 
   const sleepData = useMemo(() => {
@@ -168,12 +175,34 @@ export function AnalyticsMatrix({ logs, targets, isDemo }: { logs: DailyLog[]; t
         {PERIOD_OPTIONS.map((opt) => (
           <button
             key={opt.key}
-            onClick={() => setPeriod(opt.key)}
+            onClick={() => changePeriod(opt.key)}
             className={`flex-1 rounded-lg px-2 py-1.5 text-xs font-bold transition-all ${period === opt.key ? 'bg-brand-500 text-ink-950 shadow-sm' : 'text-slate-400 hover:text-slate-200'}`}
           >
             {opt.label}
           </button>
         ))}
+      </div>
+
+      {/* Window navigation */}
+      <div className="mt-3 flex items-center justify-center gap-3">
+        <button
+          onClick={() => setPeriodOffset((o) => o + 1)}
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-ink-700 bg-ink-850 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300"
+          title="Назад"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <span className="min-w-[110px] text-center text-xs font-semibold text-slate-300">
+          {formatShortDate(windowStart)} – {formatShortDate(windowEnd)}
+        </span>
+        <button
+          onClick={() => setPeriodOffset((o) => Math.max(0, o - 1))}
+          disabled={periodOffset === 0}
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-ink-700 bg-ink-850 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300 disabled:opacity-30 disabled:hover:border-ink-700 disabled:hover:text-slate-400"
+          title="Вперёд"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
       </div>
 
       {/* Metric selector */}
