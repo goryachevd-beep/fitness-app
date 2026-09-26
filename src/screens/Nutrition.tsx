@@ -1,43 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Flame, Settings, X, Check, Scale, Footprints } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Settings, X, Check } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { DailyLog, NutritionTargets } from '@/lib/types';
 import { Card, Loader } from '@/components/ui';
-import { LineChart } from '@/components/LineChart';
-import { SleepAnalyticsCard } from '@/components/SleepAnalyticsCard';
 import { AnalyticsMatrix } from '@/components/AnalyticsMatrix';
-import { formatShortDate, todayISO, calcEma } from '@/lib/calc';
 import { DEMO_LOGS, DEMO_TARGETS } from '@/lib/demoData';
-
-type RangeKey = '7D' | '2W' | '1M' | '3M' | 'YTD' | 'All' | 'Custom';
-
-const RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
-  { key: '7D', label: '7D' },
-  { key: '2W', label: '2W' },
-  { key: '1M', label: '1M' },
-  { key: '3M', label: '3M' },
-  { key: 'YTD', label: 'YTD' },
-  { key: 'All', label: 'All' },
-  { key: 'Custom', label: 'Custom' },
-];
-
-function rangeStart(range: RangeKey, lastDate: string, customStart?: string, customEnd?: string): string | null {
-  if (range === 'All') return null;
-  if (range === 'Custom') return customStart ?? null;
-  const end = new Date(lastDate + 'T00:00:00');
-  const d = new Date(end);
-  if (range === '7D') d.setDate(d.getDate() - 7);
-  else if (range === '2W') d.setDate(d.getDate() - 14);
-  else if (range === '1M') d.setMonth(d.getMonth() - 1);
-  else if (range === '3M') d.setMonth(d.getMonth() - 3);
-  else if (range === 'YTD') d.setMonth(0), d.setDate(1);
-  return d.toISOString().slice(0, 10);
-}
-
-function rangeEnd(range: RangeKey, lastDate: string, customEnd?: string): string {
-  if (range === 'Custom' && customEnd) return customEnd;
-  return lastDate;
-}
 
 function TargetsModal({ open, onClose, targets, onSaved }: { open: boolean; onClose: () => void; targets: NutritionTargets | null; onSaved: (t: NutritionTargets) => void }) {
   const [form, setForm] = useState<NutritionTargets | null>(targets);
@@ -138,10 +105,6 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
   const [logs, setLogs] = useState<DailyLog[] | null>(null);
   const [targets, setTargets] = useState<NutritionTargets | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [range, setRange] = useState<RangeKey>('1M');
-  const [customStart, setCustomStart] = useState('');
-  const [customEnd, setCustomEnd] = useState('');
-  const [dayType, setDayType] = useState<'training' | 'rest'>('training');
 
   useEffect(() => {
     if (isDemo) {
@@ -157,246 +120,26 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
     })();
   }, [isDemo]);
 
-  const weightLogs = logs ? logs.filter((l) => l.weight != null) : [];
-
-  const lastDate = logs && logs.length ? logs[logs.length - 1].date : todayISO();
-  const startDate = rangeStart(range, lastDate, customStart, customEnd);
-  const endDate = rangeEnd(range, lastDate, customEnd);
-
-  const filteredLogs = useMemo(() => {
-    if (!startDate) return weightLogs;
-    return weightLogs.filter((l) => l.date >= startDate && l.date <= endDate);
-  }, [weightLogs, startDate, endDate]);
-
-  const filteredAllLogs = useMemo(() => {
-    if (!logs) return [];
-    if (!startDate) return logs;
-    return logs.filter((l) => l.date >= startDate && l.date <= endDate);
-  }, [logs, startDate, endDate]);
-
-  const historyLogs = useMemo(() => {
-    const today = todayISO();
-    return filteredAllLogs.filter((l) => l.date < today);
-  }, [filteredAllLogs]);
-
-  useEffect(() => {
-    if (!logs || logs.length === 0) return;
-    const t = logs[logs.length - 1].day_type;
-    if (t === 'rest') setDayType('rest');
-    else setDayType('training');
-  }, [logs]);
-
   if (!logs) return <Loader />;
   if (logs.length === 0) return <p className="py-20 text-center text-slate-500">Дневник пуст</p>;
 
-  const today = logs[logs.length - 1];
-  const isTrainingDay = dayType === 'training';
-  const calTarget = targets ? (targets.mode === 'split' ? (isTrainingDay ? targets.training_calories : targets.rest_calories) : targets.uniform_calories) : today.weekly_target_calories ?? 2350;
-  async function toggleDayType(type: 'training' | 'rest') {
-    if (isDemo) return;
-    setDayType(type);
-    const { data: existing } = await supabase.from('daily_logs').select('id').eq('date', todayISO()).maybeSingle();
-    if (existing) {
-      await supabase.from('daily_logs').update({ day_type: type }).eq('id', existing.id);
-    } else {
-      await supabase.from('daily_logs').insert({ date: todayISO(), day_type: type });
-    }
-    setLogs((prev) => {
-      if (!prev) return prev;
-      const updated = [...prev];
-      const last = updated[updated.length - 1];
-      if (last && last.date === todayISO()) {
-        updated[updated.length - 1] = { ...last, day_type: type };
-      } else {
-        updated.push({ id: 'tmp', date: todayISO(), weight: null, steps: 0, sleep_quality: null, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: null, weekly_tdee: null, weekly_target_calories: null, day_type: type });
-      }
-      return updated;
-    });
-  }
-
-  const weightData = filteredLogs.map((l) => ({ label: formatShortDate(l.date), value: Number(l.weight) }));
-  const emaData = filteredLogs.map((l) => Number(l.weight_ema ?? l.weight));
-  const lastEma = emaData[emaData.length - 1] ?? 0;
-  const firstEma = emaData[0] ?? 0;
-  const emaDelta = lastEma - firstEma;
-
-  const recent7 = emaData.slice(-7);
-  const prev7 = emaData.slice(-14, -7);
-  const recentAvg = recent7.length ? recent7.reduce((a, b) => a + b, 0) / recent7.length : 0;
-  const prevAvg = prev7.length ? prev7.reduce((a, b) => a + b, 0) / prev7.length : 0;
-  const weeklyDelta = prevAvg ? recentAvg - prevAvg : 0;
-
-  const allValues = [...weightData.map((d) => d.value), ...emaData];
-  const yMin = allValues.length ? Math.min(...allValues) - 1.5 : undefined;
-  const yMax = allValues.length ? Math.max(...allValues) + 1.5 : undefined;
-
-  const caloriesData = historyLogs.map((l) => ({ label: formatShortDate(l.date), value: l.calories ?? 0 }));
-  const calTargetLine = historyLogs.map(() => calTarget);
-  const stepsData = historyLogs.map((l) => ({ label: formatShortDate(l.date), value: l.steps ?? 0 }));
-
-  const avgCalories = historyLogs.length ? Math.round(historyLogs.reduce((s, l) => s + (l.calories ?? 0), 0) / historyLogs.length) : 0;
-  const avgProtein = historyLogs.length ? Math.round(historyLogs.reduce((s, l) => s + (l.proteins ?? 0), 0) / historyLogs.length) : 0;
-  const avgFat = historyLogs.length ? Math.round(historyLogs.reduce((s, l) => s + (l.fats ?? 0), 0) / historyLogs.length) : 0;
-  const avgCarbs = historyLogs.length ? Math.round(historyLogs.reduce((s, l) => s + (l.carbs ?? 0), 0) / historyLogs.length) : 0;
-  const avgSteps = historyLogs.length ? Math.round(historyLogs.reduce((s, l) => s + (l.steps ?? 0), 0) / historyLogs.length) : 0;
-
-  async function logWeight(w: number) {
-    const { data: existing } = await supabase.from('daily_logs').select('id, weight_ema').eq('date', todayISO()).maybeSingle();
-    const prevEma = weightLogs.length ? Number(weightLogs[weightLogs.length - 1].weight_ema ?? weightLogs[weightLogs.length - 1].weight) : null;
-    const newEma = calcEma(w, prevEma);
-    if (existing) {
-      await supabase.from('daily_logs').update({ weight: w, weight_ema: newEma }).eq('id', existing.id);
-    } else {
-      await supabase.from('daily_logs').insert({ date: todayISO(), weight: w, weight_ema: newEma });
-    }
-    setLogs((prev) => {
-      if (!prev) return prev;
-      const updated = [...prev];
-      const last = updated[updated.length - 1];
-      if (last && last.date === todayISO()) {
-        updated[updated.length - 1] = { ...last, weight: w, weight_ema: newEma };
-      } else {
-        updated.push({ id: 'tmp', date: todayISO(), weight: w, steps: 0, sleep_quality: null, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: newEma, weekly_tdee: null, weekly_target_calories: null, day_type: null });
-      }
-      return updated;
-    });
-  }
-
   return (
     <>
-    <div className="animate-fade-up space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-extrabold text-white">Питание и вес</h1>
-          <p className="mt-0.5 text-sm text-slate-400">КБЖУ, тренд веса и цели от тренера</p>
+      <div className="animate-fade-up space-y-6">
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-extrabold text-white">Аналитика</h1>
+            <p className="mt-0.5 text-sm text-slate-400">КБЖУ, сон, шаги и тренд веса</p>
+          </div>
+          <button onClick={() => setSettingsOpen(true)} disabled={isDemo} className="flex h-10 w-10 items-center justify-center rounded-xl border border-ink-700 bg-ink-850 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300 disabled:opacity-30 disabled:hover:text-slate-400" title={isDemo ? 'Недоступно в демо-режиме' : 'Настройки целей'}>
+            <Settings className="h-5 w-5" />
+          </button>
         </div>
-        <button onClick={() => setSettingsOpen(true)} disabled={isDemo} className="flex h-10 w-10 items-center justify-center rounded-xl border border-ink-700 bg-ink-850 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300 disabled:opacity-30 disabled:hover:text-slate-400" title={isDemo ? 'Недоступно в демо-режиме' : 'Настройки целей'}>
-          <Settings className="h-5 w-5" />
-        </button>
+
+        <AnalyticsMatrix logs={logs} targets={targets} isDemo={isDemo} />
       </div>
 
-      {/* Shared range selector for all history charts */}
-      <Card className="p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-bold text-white">История за период</h2>
-          <div className="flex rounded-lg border border-ink-700 bg-ink-850 p-0.5">
-            {RANGE_OPTIONS.map((opt) => (
-              <button
-                key={opt.key}
-                onClick={() => setRange(opt.key)}
-                className={`rounded-md px-2.5 py-1 text-xs font-bold transition-colors ${range === opt.key ? 'bg-brand-500 text-ink-950' : 'text-slate-400 hover:text-slate-200'}`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        {range === 'Custom' && (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <input
-              type="date"
-              value={customStart}
-              onChange={(e) => setCustomStart(e.target.value)}
-              className="rounded-lg border border-ink-600 bg-ink-950 px-3 py-1.5 text-sm text-white outline-none focus:border-brand-500"
-            />
-            <span className="text-slate-500">—</span>
-            <input
-              type="date"
-              value={customEnd}
-              onChange={(e) => setCustomEnd(e.target.value)}
-              className="rounded-lg border border-ink-600 bg-ink-950 px-3 py-1.5 text-sm text-white outline-none focus:border-brand-500"
-            />
-          </div>
-        )}
-      </Card>
-
-      {/* Analytics matrix — multi-metric switcher */}
-      <AnalyticsMatrix logs={logs} isDemo={isDemo} />
-
-      {/* Calories & macros history */}
-      <Card className="p-5 sm:p-6">
-        <h2 className="flex items-center gap-2 text-lg font-bold text-white"><Flame className="h-5 w-5 text-orange-400" /> Калории и КБЖУ за период</h2>
-        <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <div>
-            <p className="text-xs text-slate-500">Средние ккал</p>
-            <p className="text-xl font-extrabold text-white">{avgCalories.toLocaleString('ru-RU')}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500">Средние белки</p>
-            <p className="text-xl font-extrabold text-emerald-400">{avgProtein} г</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500">Средние жиры</p>
-            <p className="text-xl font-extrabold text-amber-400">{avgFat} г</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500">Средние углеводы</p>
-            <p className="text-xl font-extrabold text-sky-400">{avgCarbs} г</p>
-          </div>
-        </div>
-        <div className="mt-4">
-          <LineChart data={caloriesData} secondary={calTargetLine} color="#f97316" secondaryColor="#475569" unit=" ккал" />
-        </div>
-        <div className="mt-2 flex items-center gap-5 text-xs text-slate-400">
-          <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-orange-500" /> Калории</span>
-          <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 rounded bg-slate-500" /> Цель: {calTarget} ккал</span>
-        </div>
-      </Card>
-
-      {/* Steps history */}
-      <Card className="p-5 sm:p-6">
-        <h2 className="flex items-center gap-2 text-lg font-bold text-white"><Footprints className="h-5 w-5 text-lime-400" /> Активность (шаги) за период</h2>
-        <div className="mt-4 grid grid-cols-2 gap-4">
-          <div>
-            <p className="text-xs text-slate-500">Средние шаги</p>
-            <p className="text-xl font-extrabold text-white">{avgSteps.toLocaleString('ru-RU')}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500">Дней в периоде</p>
-            <p className="text-xl font-extrabold text-white">{historyLogs.length}</p>
-          </div>
-        </div>
-        <div className="mt-4">
-          <LineChart data={stepsData} color="#84cc16" />
-        </div>
-      </Card>
-
-      {/* Sleep analytics */}
-      <SleepAnalyticsCard logs={filteredAllLogs} />
-
-      {/* Weight trend chart */}
-      <Card className="p-5 sm:p-6">
-        <div>
-          <h2 className="flex items-center gap-2 text-lg font-bold text-white"><Scale className="h-5 w-5 text-brand-300" /> Динамика веса (EMA)</h2>
-          <p className="mt-0.5 text-sm text-slate-400">Факт и сглаженный тренд · EMA = 0.15 × вес + 0.85 × EMA(пред.)</p>
-        </div>
-
-        <div className="mt-4 grid grid-cols-3 gap-4">
-          <div>
-            <p className="text-xs text-slate-500">Текущий EMA</p>
-            <p className="text-xl font-extrabold text-white">{lastEma.toFixed(1)} кг</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500">За период</p>
-            <p className={`text-xl font-extrabold ${emaDelta <= 0 ? 'text-brand-400' : 'text-amber-400'}`}>{emaDelta <= 0 ? '' : '+'}{emaDelta.toFixed(1)} кг</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-500">За неделю</p>
-            <p className={`text-xl font-extrabold ${weeklyDelta <= 0 ? 'text-brand-400' : 'text-amber-400'}`}>{weeklyDelta <= 0 ? '' : '+'}{weeklyDelta.toFixed(1)} кг</p>
-          </div>
-        </div>
-        <div className="mt-4">
-          <LineChart data={weightData} secondary={emaData} unit=" кг" yMin={yMin} yMax={yMax} />
-        </div>
-        <div className="mt-2 flex items-center gap-5 text-xs text-slate-400">
-          <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-brand-400" /> Факт</span>
-          <span className="flex items-center gap-1.5"><span className="h-0.5 w-4 rounded bg-slate-500" /> Тренд EMA</span>
-        </div>
-      </Card>
-
-    </div>
-
-    <TargetsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} targets={targets} onSaved={(t) => setTargets(t)} />
-  </>
+      <TargetsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} targets={targets} onSaved={(t) => setTargets(t)} />
+    </>
   );
 }

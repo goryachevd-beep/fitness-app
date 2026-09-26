@@ -79,7 +79,7 @@ type Tab = 'today' | 'nutrition' | 'workout' | 'metrics' | 'chat' | 'recipes';
 
 const NAV: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'today', label: 'Сегодня', icon: LayoutDashboard },
-  { id: 'nutrition', label: 'Питание и вес', icon: Scale },
+  { id: 'nutrition', label: 'Аналитика', icon: Scale },
   { id: 'workout', label: 'Тренировки', icon: Dumbbell },
   { id: 'metrics', label: 'Замеры', icon: Ruler },
   { id: 'chat', label: 'Чат', icon: MessageCircle },
