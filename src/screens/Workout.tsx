@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Dumbbell, Play, X, Trophy, TrendingUp, Check, Calendar, Minus, Plus, Timer,
-  Pause, XCircle, Settings, ChevronDown, ChevronUp, Lock, MessageCircle, Video as VideoIcon, Trash2, AlertTriangle, Clock, Sparkles, Save, Loader2, Pencil,
+  Pause, XCircle, Settings, ChevronDown, ChevronUp, Lock, MessageCircle, Video as VideoIcon, Trash2, AlertTriangle, Clock, Sparkles, Save, Loader2, Pencil, Zap, RotateCcw,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Exercise, PersonalRecord, WorkoutDay, WorkoutSet, WorkoutTemplate, TemplateExercise } from '@/lib/types';
@@ -173,6 +173,116 @@ function SettingsModal({ open, onClose, mode, onModeChange, restTimerEnabled, on
             </div>
           )}
         </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/* ── Progressions Modal (manual e1RM progression calculator) ── */
+function ProgressionsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [pastWeight, setPastWeight] = useState('');
+  const [pastReps, setPastReps] = useState('');
+  const [pastRir, setPastRir] = useState('');
+  const [currWeight, setCurrWeight] = useState('');
+  const [currReps, setCurrReps] = useState('');
+  const [currRir, setCurrRir] = useState('');
+
+  if (!open) return null;
+
+  function e1rm(weight: string, reps: string, rir: string): number {
+    const w = Number(weight); const r = Number(reps); const ri = Number(rir) || 0;
+    if (!w || !r) return 0;
+    return w * (1 + (r + ri) / 30);
+  }
+
+  const pastE1 = e1rm(pastWeight, pastReps, pastRir);
+  const currE1 = e1rm(currWeight, currReps, currRir);
+  const growth = pastE1 > 0 ? ((currE1 - pastE1) / pastE1) * 100 : 0;
+  const hasGrowth = pastE1 > 0 && currE1 > 0;
+
+  function resetAll() {
+    setPastWeight(''); setPastReps(''); setPastRir('');
+    setCurrWeight(''); setCurrReps(''); setCurrRir('');
+  }
+
+  const inputCls = 'w-full rounded-lg border border-ink-600 bg-ink-950 px-3 py-2.5 text-center text-lg font-bold text-white outline-none focus:border-brand-500';
+  const labelCls = 'mb-1 text-center text-[10px] uppercase tracking-wide text-slate-500';
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-ink-700 bg-ink-900 p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2"><Zap className="h-5 w-5 text-brand-300" /><h3 className="text-lg font-bold text-white">Прогрессии</h3></div>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-300"><X className="h-5 w-5" /></button>
+        </div>
+
+        {/* Past workout */}
+        <p className="mt-4 text-xs font-bold uppercase tracking-wide text-slate-500">Прошлая тренировка</p>
+        <div className="mt-2 rounded-xl border border-ink-700/60 bg-ink-900/40 p-4">
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <p className={labelCls}>Вес, кг</p>
+              <input type="number" inputMode="decimal" value={pastWeight} onChange={(e) => setPastWeight(e.target.value)} placeholder="0" className={inputCls} />
+            </div>
+            <div>
+              <p className={labelCls}>Повт.</p>
+              <input type="number" inputMode="numeric" value={pastReps} onChange={(e) => setPastReps(e.target.value)} placeholder="0" className={inputCls} />
+            </div>
+            <div>
+              <p className={labelCls}>RIR</p>
+              <input type="number" inputMode="numeric" value={pastRir} onChange={(e) => setPastRir(e.target.value)} placeholder="0" className={inputCls} />
+            </div>
+          </div>
+        </div>
+
+        {/* Current workout */}
+        <p className="mt-4 text-xs font-bold uppercase tracking-wide text-slate-500">Текущая тренировка</p>
+        <div className="mt-2 rounded-xl border border-ink-700/60 bg-ink-900/40 p-4">
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <p className={labelCls}>Вес, кг</p>
+              <input type="number" inputMode="decimal" value={currWeight} onChange={(e) => setCurrWeight(e.target.value)} placeholder="0" className={inputCls} />
+            </div>
+            <div>
+              <p className={labelCls}>Повт.</p>
+              <input type="number" inputMode="numeric" value={currReps} onChange={(e) => setCurrReps(e.target.value)} placeholder="0" className={inputCls} />
+            </div>
+            <div>
+              <p className={labelCls}>RIR</p>
+              <input type="number" inputMode="numeric" value={currRir} onChange={(e) => setCurrRir(e.target.value)} placeholder="0" className={inputCls} />
+            </div>
+          </div>
+        </div>
+
+        {/* Performance growth */}
+        <p className="mt-4 text-xs font-bold uppercase tracking-wide text-slate-500">Прирост производительности</p>
+        <div className="mt-2 rounded-xl border border-brand-500/30 bg-brand-500/10 p-4">
+          <div className="flex items-center justify-center gap-2">
+            {hasGrowth ? (
+              <>
+                {growth >= 0 ? <TrendingUp className="h-7 w-7 text-emerald-400" /> : <TrendingUp className="h-7 w-7 rotate-180 text-amber-400" />}
+                <span className={`text-4xl font-extrabold ${growth >= 0 ? 'text-emerald-400' : 'text-amber-400'}`}>{growth >= 0 ? '+' : ''}{growth.toFixed(1)}%</span>
+              </>
+            ) : (
+              <span className="text-3xl font-extrabold text-slate-600">—</span>
+            )}
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            <div className="text-center">
+              <p className="text-xs text-slate-500">Было (e1RM)</p>
+              <p className="text-xl font-extrabold text-slate-300">{pastE1 > 0 ? `${pastE1.toFixed(1)} кг` : '—'}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-slate-500">Стало (e1RM)</p>
+              <p className="text-xl font-extrabold text-white">{currE1 > 0 ? `${currE1.toFixed(1)} кг` : '—'}</p>
+            </div>
+          </div>
+        </div>
+
+        <button onClick={resetAll} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-ink-600 bg-ink-800 py-3 font-bold text-slate-300 transition-colors hover:border-red-500/50 hover:text-red-400">
+          <RotateCcw className="h-4 w-4" /> Сбросить всё
+        </button>
       </div>
     </div>,
     document.body,
@@ -435,6 +545,7 @@ export default function Workout({ onExerciseComment, isDemo }: { onExerciseComme
   useEffect(() => { try { localStorage.setItem('workout_restTimerEnabled', String(restTimerEnabled)); } catch { /* ignore */ } }, [restTimerEnabled]);
   useEffect(() => { try { localStorage.setItem('workout_restSeconds', String(restSeconds)); } catch { /* ignore */ } }, [restSeconds]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [progressionsOpen, setProgressionsOpen] = useState(false);
   const [startWorkoutOpen, setStartWorkoutOpen] = useState(false);
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
   const [unlockTarget, setUnlockTarget] = useState<string | null>(null);
@@ -647,7 +758,10 @@ export default function Workout({ onExerciseComment, isDemo }: { onExerciseComme
           <h1 className="text-2xl font-extrabold text-white">{activeDayObj?.name ?? activeDayObj?.day_name ?? activeDayObj?.title ?? 'Тренировки'}</h1>
           <p className="mt-0.5 text-sm text-slate-400">{activeDayObj ? (activeDayObj.date ? formatDate(activeDayObj.date) : 'Сегодня') : 'Программа от тренера'}</p>
         </div>
-        <button onClick={() => setSettingsOpen(true)} className="flex h-10 w-10 items-center justify-center rounded-xl border border-ink-700 bg-ink-850 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300" title="Настройки"><Settings className="h-5 w-5" /></button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setProgressionsOpen(true)} className="flex h-10 w-10 items-center justify-center rounded-xl border border-ink-700 bg-ink-850 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300" title="Прогрессии"><Zap className="h-5 w-5" /></button>
+          <button onClick={() => setSettingsOpen(true)} className="flex h-10 w-10 items-center justify-center rounded-xl border border-ink-700 bg-ink-850 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300" title="Настройки"><Settings className="h-5 w-5" /></button>
+        </div>
       </div>
 
       {/* Start new workout */}
@@ -851,6 +965,7 @@ export default function Workout({ onExerciseComment, isDemo }: { onExerciseComme
 
       {/* Overlays */}
       {restActive && <RestTimer onClose={() => setRestActive(false)} seconds={restSeconds} />}
+      <ProgressionsModal open={progressionsOpen} onClose={() => setProgressionsOpen(false)} />
       <SettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} mode={mode} onModeChange={setMode} restTimerEnabled={restTimerEnabled} onRestTimerToggle={setRestTimerEnabled} restSeconds={restSeconds} onRestSecondsChange={setRestSeconds} />
       <StartWorkoutModal open={startWorkoutOpen} onClose={() => setStartWorkoutOpen(false)} templates={templates} templateExercises={templateExercises} onStartTemplate={startNewWorkout} onStartCustom={startCustomActivity} />
       <ConfirmUnlock open={!!unlockTarget} onConfirm={() => { if (unlockTarget) updateSet(unlockTarget, { is_locked: false }); setUnlockTarget(null); }} onCancel={() => setUnlockTarget(null)} />
