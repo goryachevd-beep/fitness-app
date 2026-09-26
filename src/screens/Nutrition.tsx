@@ -5,6 +5,7 @@ import type { DailyLog, NutritionTargets } from '@/lib/types';
 import { Card, Loader } from '@/components/ui';
 import { LineChart } from '@/components/LineChart';
 import { SleepAnalyticsCard } from '@/components/SleepAnalyticsCard';
+import { AnalyticsMatrix } from '@/components/AnalyticsMatrix';
 import { formatShortDate, todayISO, calcEma } from '@/lib/calc';
 import { DEMO_LOGS, DEMO_TARGETS } from '@/lib/demoData';
 
@@ -308,6 +309,9 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
           </div>
         )}
       </Card>
+
+      {/* Analytics matrix — multi-metric switcher */}
+      <AnalyticsMatrix logs={logs} isDemo={isDemo} />
 
       {/* Calories & macros history */}
       <Card className="p-5 sm:p-6">
