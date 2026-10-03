@@ -86,7 +86,7 @@ export interface WorkoutTemplateExercise {
   exercise_id: string;
   order_index: number;
   target_sets: number;
-  target_reps: number | null;
+  target_reps: string | number | null;
   target_weight: number | null;
   target_rm_percent: number | null;
 }
@@ -97,7 +97,7 @@ export interface TemplateExercise {
   exercise_id: string;
   order_index: number;
   target_sets: number;
-  target_reps: number | null;
+  target_reps: string | number | null;
   target_weight: number | null;
   target_rm_percent: number | null;
   created_at: string | null;

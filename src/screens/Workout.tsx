@@ -707,10 +707,13 @@ export default function Workout({ onExerciseComment, isDemo }: { onExerciseComme
     const tExes = templateExercises[template.id] ?? [];
     const newSets: WorkoutSet[] = [];
     for (const te of tExes) {
+      const parsedReps = typeof te.target_reps === 'string'
+        ? parseInt(te.target_reps, 10) || null
+        : te.target_reps;
       for (let i = 1; i <= te.target_sets; i++) {
         const { data: ws } = await supabase.from('workout_sets').insert({
           workout_day_id: (day as WorkoutDay).id, exercise_id: te.exercise_id, order_index: te.order_index, set_number: i,
-          target_weight: te.target_weight, target_reps: te.target_reps, target_rm_percent: te.target_rm_percent,
+          target_weight: te.target_weight, target_reps: parsedReps, target_rm_percent: te.target_rm_percent,
           weight_kg: 0, reps: 0, is_locked: false,
         }).select().maybeSingle();
         if (ws) newSets.push(ws as WorkoutSet);
