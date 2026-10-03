@@ -646,7 +646,7 @@ export default function Workout({ onExerciseComment, isDemo }: { onExerciseComme
 
   async function addSet(exerciseId: string, orderIndex: number) {
     const setNum = sets.filter((s) => s.exercise_id === exerciseId).length + 1;
-    const { data } = await supabase.from('workout_sets').insert({ workout_day_id: activeDay, exercise_id: exerciseId, order_index: orderIndex, set_number: setNum, is_locked: false }).select().maybeSingle();
+    const { data } = await supabase.from('workout_sets').insert({ workout_day_id: activeDay, exercise_id: exerciseId, order_index: orderIndex, set_number: setNum, weight_kg: 0, reps: 0, is_locked: false }).select().maybeSingle();
     if (data) setAllSets((prev) => [...prev, data as WorkoutSet]);
   }
 
@@ -661,11 +661,11 @@ export default function Workout({ onExerciseComment, isDemo }: { onExerciseComme
     const daySets = allSets.filter((s) => s.workout_day_id === activeDay);
     for (const s of daySets) {
       const patch: Partial<WorkoutSet> = {
-        weight_kg: s.weight_kg,
-        reps: s.reps,
         notes: s.notes,
         is_locked: s.is_locked,
       };
+      if (s.weight_kg != null) patch.weight_kg = s.weight_kg;
+      if (s.reps != null) patch.reps = s.reps;
       const { error } = await supabase.from('workout_sets').update(patch).eq('id', s.id);
       if (error) console.error('[Workout] save set error:', error, s.id);
     }
@@ -710,7 +710,8 @@ export default function Workout({ onExerciseComment, isDemo }: { onExerciseComme
       for (let i = 1; i <= te.target_sets; i++) {
         const { data: ws } = await supabase.from('workout_sets').insert({
           workout_day_id: (day as WorkoutDay).id, exercise_id: te.exercise_id, order_index: te.order_index, set_number: i,
-          target_weight: te.target_weight, target_reps: te.target_reps, target_rm_percent: te.target_rm_percent, is_locked: false,
+          target_weight: te.target_weight, target_reps: te.target_reps, target_rm_percent: te.target_rm_percent,
+          weight_kg: 0, reps: 0, is_locked: false,
         }).select().maybeSingle();
         if (ws) newSets.push(ws as WorkoutSet);
       }
