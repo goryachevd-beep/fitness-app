@@ -33,73 +33,72 @@ function mergeStepsIntoLogs(prev: DailyLog[] | null, perDay: { date: string; ste
 function WeightModal({
   open,
   onClose,
-  currentWeight,
+  defaultDate,
+  existing,
+  isDemo,
   onSaved,
 }: {
   open: boolean;
   onClose: () => void;
-  currentWeight: number | null;
-  onSaved: (w: number) => void;
+  defaultDate: string;
+  existing: DailyLog | null;
+  isDemo: boolean;
+  onSaved: (date: string, weight: number) => void;
 }) {
-  const [value, setValue] = useState('');
+  const [date, setDate] = useState(defaultDate);
+  const [weight, setWeight] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (open) setValue(currentWeight ? String(currentWeight) : '');
-  }, [open, currentWeight]);
+    if (!open) return;
+    setDate(defaultDate);
+    setWeight(existing && existing.weight ? String(existing.weight) : '');
+  }, [open, defaultDate, existing]);
+
+  if (!open) return null;
 
   async function save() {
-    const w = Number(value);
-    if (!value || Number.isNaN(w)) return;
+    const w = Number(weight);
+    if (!weight || Number.isNaN(w)) return;
     setSaving(true);
-    const { data: existing } = await supabase
-      .from('daily_logs')
-      .select('id')
-      .eq('date', todayISO())
-      .maybeSingle();
-    if (existing) {
-      await supabase.from('daily_logs').update({ weight: w }).eq('id', existing.id);
+    const { data: row } = await supabase.from('daily_logs').select('id').eq('date', date).maybeSingle();
+    if (row) {
+      await supabase.from('daily_logs').update({ weight: w }).eq('id', row.id);
     } else {
-      await supabase.from('daily_logs').insert({ date: todayISO(), weight: w });
+      await supabase.from('daily_logs').insert({ date, weight: w });
     }
-    onSaved(w);
+    onSaved(date, w);
     setSaving(false);
     onClose();
   }
 
-  if (!open) return null;
+  const inputCls = 'w-full rounded-xl border border-ink-600 bg-ink-950 px-4 py-3 text-lg font-bold text-white outline-none focus:border-brand-500';
+  const labelCls = 'mb-1 text-xs font-semibold text-slate-400';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={onClose}>
       <div className="w-full max-w-sm rounded-2xl border border-ink-700 bg-ink-900 p-5" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-bold text-white">Записать вес</h3>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-300">
-            <X className="h-5 w-5" />
+          <h3 className="text-lg font-bold text-white">Ввод веса</h3>
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-300"><X className="h-5 w-5" /></button>
+        </div>
+
+        <div className="mt-4">
+          <label className={labelCls}>Дата</label>
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} />
+        </div>
+
+        <div className="mt-4">
+          <label className={labelCls}>Вес, кг</label>
+          <input type="number" inputMode="decimal" step="0.1" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="0.0" autoFocus className={inputCls} />
+        </div>
+
+        <div className="mt-5 flex gap-3">
+          <button onClick={onClose} disabled={saving} className="flex-1 rounded-xl border border-ink-600 bg-ink-800 py-3 font-bold text-slate-200 hover:bg-ink-700 disabled:opacity-50">Отмена</button>
+          <button onClick={save} disabled={saving || isDemo || !weight} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-500 py-3 font-bold text-ink-950 transition-transform hover:scale-[1.02] active:scale-95 disabled:opacity-40">
+            {saving ? <><RefreshCw className="h-4 w-4 animate-spin" /> Сохранение...</> : <><Check className="h-4 w-4" /> Сохранить</>}
           </button>
         </div>
-        <p className="mt-1 text-sm text-slate-400">Сегодня, {new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</p>
-        <div className="mt-4">
-          <label className="text-xs font-semibold text-slate-400">Вес, кг</label>
-          <input
-            type="number"
-            inputMode="decimal"
-            step="0.1"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            autoFocus
-            placeholder="80.0"
-            className="mt-1.5 w-full rounded-xl border border-ink-600 bg-ink-950 px-4 py-3 text-lg font-bold text-white outline-none focus:border-brand-500"
-          />
-        </div>
-        <button
-          onClick={save}
-          disabled={saving || !value}
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 py-3 font-bold text-ink-950 transition-transform hover:scale-[1.02] active:scale-95 disabled:opacity-40"
-        >
-          <Check className="h-4 w-4" />
-          Сохранить
-        </button>
       </div>
     </div>
   );
@@ -861,16 +860,19 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
       <WeightModal
         open={weightModal}
         onClose={() => setWeightModal(false)}
-        currentWeight={today.weight ? Number(today.weight) : null}
-        onSaved={(w) => {
+        defaultDate={todayISO()}
+        existing={logs.find((l) => l.date === todayISO()) ?? null}
+        isDemo={isDemo}
+        onSaved={(savedDate, w) => {
           setLogs((prev) => {
             if (!prev) return prev;
             const updated = [...prev];
-            const last = updated[updated.length - 1];
-            if (last && last.date === todayISO()) {
-              updated[updated.length - 1] = { ...last, weight: w };
+            const idx = updated.findIndex((l) => l.date === savedDate);
+            if (idx >= 0) {
+              updated[idx] = { ...updated[idx], weight: w, weight_ema: w };
             } else {
-              updated.push({ id: 'tmp', date: todayISO(), weight: w, steps: 0, sleep_quality: null, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: w, weekly_tdee: null, weekly_target_calories: null, day_type: null });
+              updated.push({ id: 'tmp', date: savedDate, weight: w, steps: 0, sleep_quality: null, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: w, weekly_tdee: null, weekly_target_calories: null, day_type: null });
+              updated.sort((a, b) => a.date.localeCompare(b.date));
             }
             return updated;
           });
