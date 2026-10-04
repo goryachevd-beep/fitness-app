@@ -3,11 +3,15 @@ import { Flame, TrendingDown, Footprints, Moon, Play, Plus, X, Check, RefreshCw,
 import { supabase } from '@/lib/supabase';
 import type { DailyLog, NutritionTargets, WorkoutDay } from '@/lib/types';
 import { Card, Loader, Toast } from '@/components/ui';
+import { LineChart } from '@/components/LineChart';
 import { todayISO, yesterdayISO } from '@/lib/calc';
 import { initiateGoogleFitAuth, trySyncFromSession, fetchStepsForRange, getCachedProviderToken, SYNC_FLAG } from '@/lib/googleFit';
 import { useAuthUser } from '@/lib/useAuthUser';
 import { DEMO_LOGS, DEMO_TARGETS, DEMO_TODAY_WORKOUT } from '@/lib/demoData';
 import { MOTIVATIONAL_QUOTES } from '@/lib/motivationalQuotes';
+
+const STEP_TARGET = 10000;
+const SLEEP_TARGET = 5;
 
 function getDayIndex(date: Date, length: number): number {
   const epoch = new Date(2026, 0, 1);
@@ -28,6 +32,21 @@ function mergeStepsIntoLogs(prev: DailyLog[] | null, perDay: { date: string; ste
   }
   updated.sort((a, b) => a.date.localeCompare(b.date));
   return updated;
+}
+
+function ProgressBar({ pct, tone }: { pct: number; tone: string }) {
+  const toneMap: Record<string, string> = {
+    brand: 'from-brand-500 to-brand-400',
+    emerald: 'from-emerald-500 to-emerald-400',
+    amber: 'from-amber-500 to-amber-400',
+    sky: 'from-sky-500 to-sky-400',
+    lime: 'from-lime-500 to-lime-400',
+  };
+  return (
+    <div className="h-1.5 overflow-hidden rounded-full bg-ink-700">
+      <div className={`h-full rounded-full bg-gradient-to-r ${toneMap[tone] ?? toneMap.brand} transition-all duration-700`} style={{ width: `${Math.min(pct, 100)}%` }} />
+    </div>
+  );
 }
 
 function WeightModal({
@@ -273,25 +292,13 @@ function StepsModal({
   );
 }
 
-function MiniStat({ icon: Icon, label, value, sub, tint }: { icon: typeof Flame; label: string; value: string; sub?: string; tint: string }) {
-  return (
-    <Card className="p-4">
-      <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${tint}`}>
-        <Icon className="h-4.5 w-4.5" />
-      </div>
-      <p className="mt-3 text-2xl font-extrabold text-white">{value}</p>
-      <p className="text-sm text-slate-400">{label}</p>
-      {sub && <p className="mt-0.5 text-xs text-slate-500">{sub}</p>}
-    </Card>
-  );
-}
-
 export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: () => void; isDemo: boolean }) {
   const { user } = useAuthUser();
   const [logs, setLogs] = useState<DailyLog[] | null>(null);
   const [targets, setTargets] = useState<NutritionTargets | null>(null);
   const [weightModal, setWeightModal] = useState(false);
   const [nutritionModal, setNutritionModal] = useState(false);
+  const [nutritionDate, setNutritionDate] = useState(yesterdayISO());
   const [stepsModal, setStepsModal] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [stepsSyncing, setStepsSyncing] = useState(false);
@@ -338,7 +345,6 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
         setToast({ message: `Синхронизировано ${syncedSteps.toLocaleString('ru-RU')} шагов за сегодня!`, tone: 'success' });
       }
 
-      // Silent background sync: if a provider token with fitness scope exists, refresh steps automatically
       const { data: bgSession } = await supabase.auth.getSession();
       const bgToken = bgSession.session?.provider_token ?? getCachedProviderToken();
       if (bgToken && !sessionStorage.getItem(SYNC_FLAG)) {
@@ -410,11 +416,8 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
       const { data: sessionData } = await supabase.auth.getSession();
       const sessionToken = sessionData.session?.provider_token ?? null;
       const cachedToken = getCachedProviderToken();
-      console.log('[handleStepsSync] session.provider_token =', sessionToken);
-      console.log('[handleStepsSync] getCachedProviderToken() =', cachedToken);
       const providerToken = sessionToken ?? cachedToken;
       if (providerToken) {
-        console.log('[handleStepsSync] branch: using', sessionToken ? 'real session token' : 'cached token');
         try {
           const result = await fetchStepsForRange(providerToken);
           setLogs((prev) => mergeStepsIntoLogs(prev, result.perDay));
@@ -422,14 +425,12 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
         } catch (err) {
           const message = err instanceof Error ? err.message : '';
           if (message.includes('403') || message.includes('insufficient') || message.includes('PERMISSION_DENIED') || message.includes('ACCESS_TOKEN_SCOPE_INSUFFICIENT')) {
-            console.log('[handleStepsSync] branch: API 403/permission error -> re-auth via initiateGoogleFitAuth');
             initiateGoogleFitAuth();
             return;
           }
           throw err;
         }
       } else {
-        console.log('[handleStepsSync] branch: neither token present -> initiateGoogleFitAuth');
         initiateGoogleFitAuth();
       }
     } catch (e) {
@@ -443,6 +444,7 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
   if (logs.length === 0) return <p className="py-20 text-center text-slate-500">Дневник пуст</p>;
 
   const today = logs[logs.length - 1];
+  const todayLog = logs.find((l) => l.date === todayISO()) ?? null;
   const weightLogs = logs.filter((l) => l.weight != null);
   const emaData = weightLogs.slice(-30).map((l) => Number(l.weight_ema ?? l.weight));
   const lastEma = emaData[emaData.length - 1] ?? 0;
@@ -452,13 +454,68 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
   const prevAvg = prev7.length ? prev7.reduce((a, b) => a + b, 0) / prev7.length : 0;
   const weeklyDelta = prevAvg ? recentAvg - prevAvg : 0;
 
+  // ── Today's plan targets ──
+  const isTrainingDay = todayLog?.day_type === 'training' || !!todayWorkout;
+  const todayCalTarget = targets
+    ? targets.mode === 'split'
+      ? isTrainingDay ? targets.training_calories : targets.rest_calories
+      : targets.uniform_calories
+    : 0;
+  const todayCarbTarget = targets
+    ? targets.mode === 'split'
+      ? isTrainingDay ? targets.training_carbs : targets.rest_carbs
+      : targets.training_carbs
+    : 0;
+  const todayProteinTarget = targets?.protein ?? 0;
+  const todayFatTarget = targets?.fats ?? 0;
+
+  const workoutName = todayWorkout?.name ?? todayWorkout?.day_name ?? todayWorkout?.title ?? null;
+  const workoutDuration = todayWorkout?.notes?.match(/\((\d+)\s*мин\)/)?.[1] ?? null;
+  const workoutDone = todayWorkout?.completed ?? false;
+
+  // ── Today's progress ──
+  const calPct = todayCalTarget > 0 ? ((todayLog?.calories ?? 0) / todayCalTarget) * 100 : 0;
+  const proteinPct = todayProteinTarget > 0 ? ((todayLog?.proteins ?? 0) / todayProteinTarget) * 100 : 0;
+  const stepPct = ((todayLog?.steps ?? 0) / STEP_TARGET) * 100;
+
+  // ── Overall progress ──
+  const weightChartLabels = weightLogs.slice(-14).map((l) => {
+    const d = new Date(l.date + 'T00:00:00');
+    return { label: `${d.getDate()}.${d.getMonth() + 1}`, value: Number(l.weight_ema ?? l.weight) };
+  });
+  const last7ForAvg = logs.slice(-7);
+  const avgSteps7 = last7ForAvg.length ? Math.round(last7ForAvg.reduce((s, l) => s + l.steps, 0) / last7ForAvg.length) : 0;
+  const sleepLogs7 = last7ForAvg.filter((l) => l.sleep_quality != null);
+  const avgSleep7 = sleepLogs7.length ? sleepLogs7.reduce((s, l) => s + (l.sleep_quality ?? 0), 0) / sleepLogs7.length : 0;
+
+  // ── Coach assignment ──
+  const weekAgo = new Date();
+  weekAgo.setDate(weekAgo.getDate() - 6);
+  const weekAgoISO = weekAgo.toISOString().slice(0, 10);
+  const weekLogs = logs.filter((l) => l.date >= weekAgoISO);
+  const completedDays = weekLogs.filter((l) => l.calories > 0 || l.steps > 0).length;
+  const coachInstruction = targets
+    ? `Удерживайте ${todayCalTarget.toLocaleString('ru-RU')} ккал, ${STEP_TARGET.toLocaleString('ru-RU')} шагов и регулярные тренировки каждую неделю.`
+    : 'Следуйте плану тренера для достижения целей.';
+
+  // ── Yesterday compact ──
+  const yLog = logs.find((l) => l.date === yesterdayISO()) ?? null;
+  const yIsTraining = yLog?.day_type === 'training';
+  const yCalTarget = targets
+    ? targets.mode === 'split'
+      ? yIsTraining ? targets.training_calories : targets.rest_calories
+      : targets.uniform_calories
+    : 0;
+  const yProteinTarget = targets?.protein ?? 0;
+  const yPct = yLog && yCalTarget > 0 ? Math.round((yLog.calories / yCalTarget) * 100) : 0;
+
+  // ── Header ──
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Доброе утро' : hour < 18 ? 'Добрый день' : 'Добрый вечер';
-
+  const todayDateLabel = new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
   const todayQuote = MOTIVATIONAL_QUOTES[getDayIndex(new Date(), MOTIVATIONAL_QUOTES.length)];
 
   const insightMessage = (() => {
-    // 1. Reminder (only after 20:00, only if today's entry is missing something)
     if (hour >= 20 && today.date === todayISO()) {
       const missing: string[] = [];
       if (today.weight == null) missing.push('вес');
@@ -468,13 +525,9 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
         return `Не забудь отметить ${missing.join(' и ')} сегодня`;
       }
     }
-
-    // 2. Weight trend praise (loss of 0.3kg or more)
     if (emaData.length >= 14 && weeklyDelta <= -0.3) {
       return `💪 ${Math.abs(weeklyDelta).toFixed(1)} кг за 2 недели — отличная динамика!`;
     }
-
-    // 3. Streak
     let streak = 0;
     for (let i = logs.length - 1; i >= 1; i--) {
       const cur = new Date(logs[i].date);
@@ -491,302 +544,196 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
     if (streak >= 2) {
       return `🔥 ${streak + 1} дней подряд с записью — не останавливайся!`;
     }
-
     return '';
   })();
 
+  function statusLabel(pct: number): string {
+    return pct >= 100 ? 'Готово' : pct >= 75 ? 'На пути' : 'Внимание';
+  }
+  function statusColor(pct: number): string {
+    return pct >= 100 ? 'text-emerald-400' : pct >= 75 ? 'text-brand-400' : 'text-amber-400';
+  }
+
   return (
-    <div className="animate-fade-up space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="animate-fade-up space-y-5">
+      {/* ── 1. HEADER ── */}
+      <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm text-slate-400">{greeting},</p>
           <h1 className="text-2xl font-extrabold text-white">{user?.displayName ?? 'Гость'}</h1>
-          {insightMessage && (
-            <p className="mt-1 text-sm text-brand-300/80">{insightMessage}</p>
-          )}
+          <p className="mt-0.5 text-sm capitalize text-slate-500">{todayDateLabel}</p>
+          {insightMessage && <p className="mt-1 text-sm text-brand-300/80">{insightMessage}</p>}
         </div>
-        <div className="flex items-center gap-2">
-          {!isDemo && (
-            <button
-              onClick={handleSync}
-              disabled={syncing}
-              className="flex items-center gap-2 rounded-xl border border-ink-700 bg-ink-850 px-4 py-3 text-sm font-bold text-slate-200 transition-colors hover:border-brand-500/50 hover:text-brand-300 disabled:opacity-50"
-            >
-              <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
-              {syncing ? 'Синхронизация...' : 'Синхр. данные'}
-            </button>
-          )}
+        {!isDemo && (
           <button
-            onClick={onStartWorkout}
-            disabled={isDemo}
-            className="flex items-center gap-2.5 rounded-xl bg-brand-500 px-5 py-3 font-bold text-ink-950 shadow-glow transition-transform hover:scale-[1.03] active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
-            title={isDemo ? 'Недоступно в демо-режиме' : undefined}
+            onClick={handleSync}
+            disabled={syncing}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-ink-700 bg-ink-850 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300 disabled:opacity-50"
+            title="Синхронизировать данные"
           >
-            <Play className="h-4 w-4 fill-ink-950" />
-            Старт тренировки
+            <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
           </button>
-        </div>
+        )}
       </div>
 
-      {/* Today's workout status banner — only shown if a session exists for today */}
-      {todayWorkout && (
-        <Card className="flex items-center gap-4 border-brand-500/30 bg-brand-500/10 p-5">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-500/20">
-            {todayWorkout.notes && /\(\d+\s*мин\)/.test(todayWorkout.notes) ? (
-              <Clock className="h-6 w-6 text-brand-300" />
-            ) : (
-              <Dumbbell className="h-6 w-6 text-brand-300" />
-            )}
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-brand-400">Сегодня выполнено</p>
-            <p className="text-lg font-bold text-white">{todayWorkout.notes ?? todayWorkout.name ?? 'Тренировка'}</p>
-          </div>
-          <Check className="ml-auto h-6 w-6 text-brand-400" />
-        </Card>
-      )}
-
-      {/* Мысль дня */}
-      <Card className="flex items-start gap-3 p-4">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-500/15 text-brand-300">
-          <Sparkles className="h-4.5 w-4.5" />
-        </div>
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Мысль дня</p>
-          <p className="mt-0.5 text-sm font-medium leading-relaxed text-slate-200">{todayQuote}</p>
-        </div>
-      </Card>
-
-      {/* Итог за вчера — Yesterday's Summary */}
-      {(() => {
-        const yDate = yesterdayISO();
-        const yLog = logs.find((l) => l.date === yDate) ?? null;
-        const yIsTraining = yLog?.day_type === 'training';
-        const yCalTarget = targets
-          ? targets.mode === 'split'
-            ? yIsTraining ? targets.training_calories : targets.rest_calories
-            : targets.uniform_calories
-          : 2350;
-        const yCarbTarget = targets
-          ? targets.mode === 'split'
-            ? yIsTraining ? targets.training_carbs : targets.rest_carbs
-            : targets.training_carbs
-          : 240;
-        const yProteinTarget = targets?.protein ?? 160;
-        const yFatTarget = targets?.fats ?? 70;
-        const yCalPct = yLog ? Math.min((yLog.calories / yCalTarget) * 100, 100) : 0;
-        const yCalDiff = yLog ? yLog.calories - yCalTarget : 0;
-        const yCalMet = yLog ? Math.abs(yCalDiff) <= 150 : false;
-        const yProteinMet = yLog ? yLog.proteins >= yProteinTarget * 0.9 : false;
-        const yFatMet = yLog ? Math.abs(yLog.fats - yFatTarget) <= 20 : false;
-        const yCarbMet = yLog ? Math.abs(yLog.carbs - yCarbTarget) <= 50 : false;
-        const allMet = yCalMet && yProteinMet && yFatMet && yCarbMet;
-        const yLabel = new Date(yDate + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
-
-        return (
-          <Card className="p-5 sm:p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <History className="h-5 w-5 text-brand-400" />
-                <h2 className="text-lg font-bold text-white">Итог за вчера</h2>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setNutritionModal(true)}
-                  disabled={isDemo}
-                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-ink-600 bg-ink-800 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300 disabled:opacity-30"
-                  title={isDemo ? 'Недоступно в демо-режиме' : 'Ввести КБЖУ'}
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
-                <span className="text-xs font-medium text-slate-500">{yLabel}</span>
-              </div>
-            </div>
-
-            {yLog ? (
-              <>
-                {/* Calories */}
-                <div className="mt-4 flex items-end justify-between">
-                  <div>
-                    <p className="text-4xl font-extrabold text-white">
-                      {yLog.calories.toLocaleString('ru-RU')}
-                      <span className="ml-1.5 text-lg font-semibold text-slate-500">/ {yCalTarget} ккал</span>
-                    </p>
-                    <p className="mt-1 text-sm text-slate-400">
-                      {yCalDiff > 0 ? `Перебор на ${yCalDiff} ккал` : yCalDiff < 0 ? `Недобор на ${Math.abs(yCalDiff)} ккал` : 'Точно в цель'}
-                    </p>
-                  </div>
-                  <span className="text-sm font-bold text-brand-400">{yCalPct.toFixed(0)}%</span>
-                </div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-ink-700">
-                  <div className="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-400 transition-all duration-700" style={{ width: `${yCalPct}%` }} />
-                </div>
-
-                {/* Macros */}
-                <div className="mt-5 grid grid-cols-3 gap-4">
-                  <div className="rounded-xl border border-ink-700 bg-ink-850 p-3">
-                    <div className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                      <p className="text-xs font-semibold text-slate-400">Белки</p>
-                    </div>
-                    <p className="mt-1.5 text-lg font-extrabold text-white">{yLog.proteins}<span className="text-sm text-slate-500">/{yProteinTarget}г</span></p>
-                    <p className={`mt-0.5 text-xs font-medium ${yProteinMet ? 'text-emerald-400' : 'text-amber-400'}`}>{yProteinMet ? 'Выполнено' : 'Недовыполнено'}</p>
-                  </div>
-                  <div className="rounded-xl border border-ink-700 bg-ink-850 p-3">
-                    <div className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-sky-400" />
-                      <p className="text-xs font-semibold text-slate-400">Углеводы</p>
-                    </div>
-                    <p className="mt-1.5 text-lg font-extrabold text-white">{yLog.carbs}<span className="text-sm text-slate-500">/{yCarbTarget}г</span></p>
-                    <p className={`mt-0.5 text-xs font-medium ${yCarbMet ? 'text-emerald-400' : 'text-amber-400'}`}>{yCarbMet ? 'Выполнено' : 'Отклонение'}</p>
-                  </div>
-                  <div className="rounded-xl border border-ink-700 bg-ink-850 p-3">
-                    <div className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 rounded-full bg-amber-400" />
-                      <p className="text-xs font-semibold text-slate-400">Жиры</p>
-                    </div>
-                    <p className="mt-1.5 text-lg font-extrabold text-white">{yLog.fats}<span className="text-sm text-slate-500">/{yFatTarget}г</span></p>
-                    <p className={`mt-0.5 text-xs font-medium ${yFatMet ? 'text-emerald-400' : 'text-amber-400'}`}>{yFatMet ? 'Выполнено' : 'Отклонение'}</p>
-                  </div>
-                </div>
-
-                {/* Summary status */}
-                <div className={`mt-4 flex items-center gap-2 rounded-xl border p-3 ${allMet ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-amber-500/30 bg-amber-500/10'}`}>
-                  {allMet ? <Check className="h-4 w-4 text-emerald-400" /> : <Zap className="h-4 w-4 text-amber-400" />}
-                  <p className={`text-sm font-semibold ${allMet ? 'text-emerald-300' : 'text-amber-300'}`}>
-                    {allMet ? 'Цели за вчера успешно выполнены!' : 'Часть целей не достигнута — скорректируйте сегодня'}
-                  </p>
-                </div>
-              </>
-            ) : (
-              <div className="mt-4 flex items-center gap-2 rounded-xl border border-ink-700 bg-ink-850 p-4">
-                <History className="h-4 w-4 text-slate-500" />
-                <p className="text-sm text-slate-400">Нет данных за вчера. Отметьте питание на странице «Питание и вес».</p>
-              </div>
-            )}
-          </Card>
-        );
-      })()}
-
-      {/* Цели на неделю от тренера — Coach's Weekly Targets */}
+      {/* ── 2. TODAY'S PLAN ── */}
       {targets && (
-        <Card className="p-5 sm:p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Target className="h-5 w-5 text-brand-400" />
-              <h2 className="text-lg font-bold text-white">Цели на неделю от тренера</h2>
-            </div>
-            <span className="flex items-center gap-1.5 rounded-lg border border-brand-500/30 bg-brand-500/10 px-3 py-1.5 text-xs font-bold text-brand-300">
-              <Award className="h-3.5 w-3.5" />
-              Удержание веса / Рекомпозиция
+        <Card className="border-brand-500/25 bg-brand-500/[0.04] p-5">
+          <div className="flex items-center gap-2">
+            <Target className="h-5 w-5 text-brand-400" />
+            <h2 className="text-lg font-bold text-white">План на сегодня</h2>
+            <span className="ml-auto rounded-lg border border-ink-600 bg-ink-850 px-2.5 py-1 text-xs font-semibold text-slate-400">
+              {isTrainingDay ? 'Тренировочный день' : 'День отдыха'}
             </span>
           </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {/* Rest day */}
-            <div className="rounded-xl border border-ink-700 bg-ink-850 p-4">
-              <div className="flex items-center gap-2">
-                <Moon className="h-4 w-4 text-slate-400" />
-                <p className="text-sm font-bold text-slate-300">День отдыха</p>
-              </div>
-              <div className="mt-3 flex items-end justify-between">
-                <div>
-                  <p className="text-2xl font-extrabold text-white">{targets.mode === 'split' ? targets.rest_calories : targets.uniform_calories}<span className="ml-1 text-sm text-slate-500">ккал</span></p>
-                  <p className="mt-1 text-xs text-slate-400">Углеводы: {targets.mode === 'split' ? targets.rest_carbs : targets.training_carbs}г</p>
+          {/* Calorie target */}
+          <div className="mt-4">
+            <p className="text-3xl font-extrabold text-white">
+              {todayCalTarget.toLocaleString('ru-RU')}
+              <span className="ml-1.5 text-base font-semibold text-slate-500">ккал</span>
+            </p>
+          </div>
+
+          {/* Macro targets */}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300">Белки {todayProteinTarget}г</span>
+            <span className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-300">Жиры {todayFatTarget}г</span>
+            <span className="rounded-lg border border-sky-500/20 bg-sky-500/10 px-3 py-1.5 text-xs font-semibold text-sky-300">Углеводы {todayCarbTarget}г</span>
+          </div>
+
+          {/* Workout */}
+          <div className="mt-4 rounded-xl border border-ink-700 bg-ink-850 p-3.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-500/15">
+                  <Dumbbell className="h-4.5 w-4.5 text-brand-300" />
                 </div>
-                <span className="rounded-lg bg-slate-500/15 px-2.5 py-1 text-xs font-semibold text-slate-300">Отдых</span>
-              </div>
-            </div>
-            {/* Training day */}
-            <div className="rounded-xl border border-brand-500/30 bg-brand-500/5 p-4">
-              <div className="flex items-center gap-2">
-                <Dumbbell className="h-4 w-4 text-brand-400" />
-                <p className="text-sm font-bold text-brand-300">Тренировочный день</p>
-              </div>
-              <div className="mt-3 flex items-end justify-between">
                 <div>
-                  <p className="text-2xl font-extrabold text-white">{targets.mode === 'split' ? targets.training_calories : targets.uniform_calories}<span className="ml-1 text-sm text-slate-500">ккал</span></p>
-                  <p className="mt-1 text-xs text-slate-400">Углеводы: {targets.training_carbs}г</p>
+                  <p className="text-sm font-bold text-white">{workoutName ?? 'День отдыха'}</p>
+                  {workoutDuration && <p className="text-xs text-slate-400">~{workoutDuration} мин</p>}
                 </div>
-                <span className="rounded-lg bg-brand-500/15 px-2.5 py-1 text-xs font-semibold text-brand-300">Тренировка</span>
               </div>
+              {workoutDone ? (
+                <span className="flex items-center gap-1 rounded-lg bg-emerald-500/15 px-3 py-1.5 text-xs font-bold text-emerald-400">
+                  <Check className="h-3.5 w-3.5" /> Выполнено
+                </span>
+              ) : workoutName ? (
+                <button
+                  onClick={onStartWorkout}
+                  disabled={isDemo}
+                  className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-4 py-2 text-sm font-bold text-ink-950 transition-transform hover:scale-[1.03] active:scale-95 disabled:opacity-50"
+                >
+                  <Play className="h-3.5 w-3.5 fill-ink-950" /> Старт
+                </button>
+              ) : null}
             </div>
           </div>
 
-          {/* Constant macros */}
-          <div className="mt-3 flex flex-wrap gap-3">
-            <span className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-sm font-semibold text-emerald-300">Белки: min {targets.protein}г</span>
-            <span className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-sm font-semibold text-amber-300">Жиры: ~{targets.fats}г</span>
+          {/* Steps + Sleep targets */}
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div className="flex items-center gap-2.5 rounded-xl border border-ink-700 bg-ink-850 p-3">
+              <Footprints className="h-4 w-4 text-lime-400" />
+              <div>
+                <p className="text-sm font-bold text-white">{STEP_TARGET.toLocaleString('ru-RU')}</p>
+                <p className="text-xs text-slate-400">шагов</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2.5 rounded-xl border border-ink-700 bg-ink-850 p-3">
+              <Moon className="h-4 w-4 text-sky-300" />
+              <div>
+                <p className="text-sm font-bold text-white">{SLEEP_TARGET}/5</p>
+                <p className="text-xs text-slate-400">качество сна</p>
+              </div>
+            </div>
           </div>
         </Card>
       )}
 
-      {/* Quick stats */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-        <Card className="p-4">
-          <div className="flex items-start justify-between">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-500/15 text-brand-300">
-              <TrendingDown className="h-4.5 w-4.5" />
-            </div>
-            <button
-              onClick={() => setWeightModal(true)}
-              disabled={isDemo}
-              className="flex h-7 w-7 items-center justify-center rounded-lg border border-ink-600 bg-ink-800 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300 disabled:opacity-30 disabled:hover:text-slate-400"
-              title={isDemo ? 'Недоступно в демо-режиме' : 'Записать вес'}
-            >
-              <Plus className="h-4 w-4" />
+      {/* ── 3. TODAY'S PROGRESS ── */}
+      <Card className="p-5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-white">Прогресс сегодня</h2>
+          <div className="flex gap-1.5">
+            <button onClick={() => { setNutritionDate(todayISO()); setNutritionModal(true); }} disabled={isDemo} className="flex h-7 w-7 items-center justify-center rounded-lg border border-ink-600 bg-ink-800 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300 disabled:opacity-30" title="Ввести КБЖУ">
+              <Flame className="h-3.5 w-3.5" />
+            </button>
+            <button onClick={() => setStepsModal(true)} disabled={isDemo} className="flex h-7 w-7 items-center justify-center rounded-lg border border-ink-600 bg-ink-800 text-slate-400 transition-colors hover:border-lime-500/50 hover:text-lime-300 disabled:opacity-30" title="Ввести шаги">
+              <Footprints className="h-3.5 w-3.5" />
+            </button>
+            <button onClick={() => setWeightModal(true)} disabled={isDemo} className="flex h-7 w-7 items-center justify-center rounded-lg border border-ink-600 bg-ink-800 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300 disabled:opacity-30" title="Записать вес">
+              <TrendingDown className="h-3.5 w-3.5" />
             </button>
           </div>
-          <p className="mt-3 text-2xl font-extrabold text-white">{lastEma.toFixed(1)} кг</p>
-          <p className="text-sm text-slate-400">Вес (EMA)</p>
-          <p className="mt-0.5 text-xs text-slate-500">{weeklyDelta <= 0 ? '' : '+'}{weeklyDelta.toFixed(1)} кг за неделю</p>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-start justify-between">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-lime-500/15 text-lime-400">
-              <Footprints className="h-4.5 w-4.5" />
+        </div>
+
+        {/* Calories + Protein + Steps + Workout grid */}
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="rounded-xl border border-ink-700 bg-ink-850 p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-400">Калории</span>
+              <span className={`text-[11px] font-bold ${statusColor(calPct)}`}>{statusLabel(calPct)}</span>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setStepsModal(true)}
-                disabled={isDemo}
-                className="flex h-7 w-7 items-center justify-center rounded-lg border border-ink-600 bg-ink-800 text-slate-400 transition-colors hover:border-lime-500/50 hover:text-lime-300 disabled:opacity-30"
-                title={isDemo ? 'Недоступно в демо-режиме' : 'Ввести шаги'}
-              >
-                <Plus className="h-4 w-4" />
-              </button>
-              <button
-                onClick={handleStepsSync}
-                disabled={stepsSyncing || isDemo}
-                className="flex h-7 w-7 items-center justify-center rounded-lg border border-ink-600 bg-ink-800 text-slate-400 transition-colors hover:border-lime-500/50 hover:text-lime-300 disabled:opacity-50"
-                title={isDemo ? 'Недоступно в демо-режиме' : 'Синхронизировать шаги'}
-              >
-                <RefreshCw className={`h-4 w-4 ${stepsSyncing ? 'animate-spin' : ''}`} />
-              </button>
+            <p className="mt-1.5 text-lg font-extrabold text-white">
+              {(todayLog?.calories ?? 0).toLocaleString('ru-RU')}
+              <span className="text-sm text-slate-500"> / {todayCalTarget.toLocaleString('ru-RU')}</span>
+            </p>
+            <div className="mt-2"><ProgressBar pct={calPct} tone="brand" /></div>
+          </div>
+
+          <div className="rounded-xl border border-ink-700 bg-ink-850 p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-400">Белки</span>
+              <span className={`text-[11px] font-bold ${statusColor(proteinPct)}`}>{statusLabel(proteinPct)}</span>
             </div>
+            <p className="mt-1.5 text-lg font-extrabold text-white">
+              {todayLog?.proteins ?? 0}
+              <span className="text-sm text-slate-500"> / {todayProteinTarget} г</span>
+            </p>
+            <div className="mt-2"><ProgressBar pct={proteinPct} tone="emerald" /></div>
           </div>
-          <p className="mt-3 text-2xl font-extrabold text-white">{(() => {
-            const yDate = yesterdayISO();
-            const last7 = logs.filter((l) => l.date <= yDate).slice(-7);
-            const avg = last7.length ? Math.round(last7.reduce((s, l) => s + l.steps, 0) / last7.length) : 0;
-            return avg.toLocaleString('ru-RU');
-          })()}</p>
-          <p className="text-sm text-slate-400">Шаги</p>
-          <p className="mt-0.5 text-xs text-slate-500">{(() => {
-            const days = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-            const yDate = yesterdayISO();
-            const end = new Date(yDate + 'T00:00:00');
-            const start = new Date(yDate + 'T00:00:00');
-            start.setDate(start.getDate() - 6);
-            return `Среднее за 7 дней (${days[start.getDay()]} – ${days[end.getDay()]})`;
-          })()}</p>
-        </Card>
-        <Card className="p-4">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/15 text-sky-300">
-            <Moon className="h-4.5 w-4.5" />
+
+          <div className="rounded-xl border border-ink-700 bg-ink-850 p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-400">Шаги</span>
+              <span className={`text-[11px] font-bold ${statusColor(stepPct)}`}>{statusLabel(stepPct)}</span>
+            </div>
+            <p className="mt-1.5 text-lg font-extrabold text-white">
+              {(todayLog?.steps ?? 0).toLocaleString('ru-RU')}
+              <span className="text-sm text-slate-500"> / {STEP_TARGET.toLocaleString('ru-RU')}</span>
+            </p>
+            <div className="mt-2"><ProgressBar pct={stepPct} tone="lime" /></div>
           </div>
-          <p className="mt-3 text-2xl font-extrabold text-white">{today.sleep_quality ?? '—'}<span className="text-lg text-slate-500">/5</span></p>
-          <p className="text-sm text-slate-400">Сон</p>
+
+          <div className="rounded-xl border border-ink-700 bg-ink-850 p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-400">Тренировка</span>
+              <span className={`text-[11px] font-bold ${workoutDone ? 'text-emerald-400' : todayWorkout ? 'text-amber-400' : 'text-slate-500'}`}>
+                {workoutDone ? 'Готово' : todayWorkout ? 'Не выполнено' : 'Нет'}
+              </span>
+            </div>
+            <p className="mt-1.5 text-sm font-bold text-white">
+              {workoutDone ? <span className="flex items-center gap-1"><Check className="h-4 w-4 text-emerald-400" /> Выполнено</span> : todayWorkout ? workoutName : 'Не запланирована'}
+            </p>
+            {!workoutDone && todayWorkout && (
+              <button onClick={onStartWorkout} disabled={isDemo} className="mt-2 flex items-center gap-1 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-bold text-ink-950 transition-transform hover:scale-[1.03] active:scale-95 disabled:opacity-50">
+                <Play className="h-3 w-3 fill-ink-950" /> Старт
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Sleep */}
+        <div className="mt-3 rounded-xl border border-ink-700 bg-ink-850 p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-400">Сон</span>
+            <span className={`text-[11px] font-bold ${(todayLog?.sleep_quality ?? 0) >= 4 ? 'text-emerald-400' : (todayLog?.sleep_quality ?? 0) >= 1 ? 'text-amber-400' : 'text-slate-500'}`}>
+              {(todayLog?.sleep_quality ?? 0) >= 4 ? 'Готово' : (todayLog?.sleep_quality ?? 0) >= 1 ? 'Отмечено' : 'Не отмечен'}
+            </span>
+          </div>
+          <p className="mt-1.5 text-lg font-extrabold text-white">
+            {todayLog?.sleep_quality ?? '—'}<span className="text-sm text-slate-500"> / {SLEEP_TARGET}</span>
+          </p>
           <div className="mt-2 flex items-center gap-1.5">
             {([
               { q: 5, label: 'Выспался', color: 'bg-emerald-500', ring: 'ring-emerald-400' },
@@ -799,25 +746,111 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
                 disabled={isDemo}
                 title={opt.label}
                 className={`flex-1 flex flex-col items-center gap-1 rounded-lg border py-1.5 transition-all disabled:opacity-30 ${
-                  today.sleep_quality === opt.q
+                  todayLog?.sleep_quality === opt.q
                     ? `border-transparent ${opt.color} ring-2 ${opt.ring}`
                     : 'border-ink-600 bg-ink-800 hover:border-ink-500'
                 }`}
               >
-                <span className={`h-3 w-3 rounded-full ${opt.color}`} />
+                <span className={`h-2.5 w-2.5 rounded-full ${opt.color}`} />
                 <span className="text-[10px] font-medium text-slate-300">{opt.label}</span>
               </button>
             ))}
           </div>
-          {isDemo && <p className="mt-1.5 text-xs text-slate-500">Отметь сам</p>}
-        </Card>
-      </div>
+        </div>
+      </Card>
 
+      {/* ── 4. COACH ASSIGNMENT ── */}
+      <Card className="p-4">
+        <div className="flex items-center gap-2">
+          <Award className="h-5 w-5 text-brand-400" />
+          <h2 className="text-base font-bold text-white">Задание от тренера</h2>
+        </div>
+        <p className="mt-2 text-sm leading-relaxed text-slate-300">{coachInstruction}</p>
+        <div className="mt-3 flex items-center gap-3">
+          <div className="flex-1"><ProgressBar pct={(completedDays / 7) * 100} tone="brand" /></div>
+          <span className="shrink-0 text-sm font-bold text-white">{completedDays} / 7 дней</span>
+        </div>
+      </Card>
+
+      {/* ── 5. OVERALL PROGRESS ── */}
+      <Card className="p-5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-white">Ваш прогресс</h2>
+          <button
+            onClick={() => setWeightModal(true)}
+            disabled={isDemo}
+            className="flex h-7 w-7 items-center justify-center rounded-lg border border-ink-600 bg-ink-800 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300 disabled:opacity-30"
+            title="Записать вес"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="mt-3 flex items-end justify-between">
+          <div>
+            <p className="text-3xl font-extrabold text-white">{lastEma.toFixed(1)}<span className="text-base text-slate-500"> кг</span></p>
+            <p className={`mt-0.5 text-sm font-medium ${weeklyDelta <= 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+              {weeklyDelta <= 0 ? '' : '+'}{weeklyDelta.toFixed(1)} кг за неделю
+            </p>
+          </div>
+        </div>
+        {weightChartLabels.length > 1 && (
+          <div className="mt-3">
+            <LineChart data={weightChartLabels} height={120} unit=" кг" />
+          </div>
+        )}
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="flex items-center gap-2.5 rounded-xl border border-ink-700 bg-ink-850 p-3">
+            <Footprints className="h-4 w-4 text-lime-400" />
+            <div>
+              <p className="text-sm font-bold text-white">{avgSteps7.toLocaleString('ru-RU')}</p>
+              <p className="text-xs text-slate-400">шагов в среднем (7д)</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5 rounded-xl border border-ink-700 bg-ink-850 p-3">
+            <Moon className="h-4 w-4 text-sky-300" />
+            <div>
+              <p className="text-sm font-bold text-white">{avgSleep7 > 0 ? avgSleep7.toFixed(1) : '—'}/5</p>
+              <p className="text-xs text-slate-400">сон в среднем (7д)</p>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* ── 6. YESTERDAY (compact) ── */}
+      {yLog && (
+        <Card className="p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <History className="h-4 w-4 text-slate-500" />
+              <h3 className="text-sm font-bold text-white">Вчера — {yPct}%</h3>
+            </div>
+            <button
+              onClick={() => { setNutritionDate(yesterdayISO()); setNutritionModal(true); }}
+              disabled={isDemo}
+              className="flex h-6 w-6 items-center justify-center rounded-lg border border-ink-600 bg-ink-800 text-slate-400 transition-colors hover:border-brand-500/50 hover:text-brand-300 disabled:opacity-30"
+              title="Редактировать КБЖУ"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+            <span className="font-medium text-slate-300">{yLog.calories.toLocaleString('ru-RU')}<span className="text-slate-500"> / {yCalTarget.toLocaleString('ru-RU')} ккал</span></span>
+            <span className="font-medium text-slate-300">{yLog.proteins}<span className="text-slate-500"> / {yProteinTarget} г белка</span></span>
+            <span className="font-medium text-slate-300">{yLog.steps.toLocaleString('ru-RU')}<span className="text-slate-500"> / {STEP_TARGET.toLocaleString('ru-RU')} шагов</span></span>
+            {yLog.sleep_quality != null && <span className="text-slate-400">Сон {yLog.sleep_quality}/5</span>}
+          </div>
+        </Card>
+      )}
+
+      {/* Quote — subtle footer */}
+      <p className="px-4 text-center text-xs italic text-slate-600">{todayQuote}</p>
+
+      {/* ── Modals ── */}
       <NutritionModal
         open={nutritionModal}
         onClose={() => setNutritionModal(false)}
-        defaultDate={yesterdayISO()}
-        existing={logs.find((l) => l.date === yesterdayISO()) ?? null}
+        defaultDate={nutritionDate}
+        existing={logs.find((l) => l.date === nutritionDate) ?? null}
         isDemo={isDemo}
         onSaved={(savedDate, patch) => {
           setLogs((prev) => {
