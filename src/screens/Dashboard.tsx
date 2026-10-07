@@ -289,6 +289,7 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
   const [stepsSyncing, setStepsSyncing] = useState(false);
   const [toast, setToast] = useState<{ message: string; tone: 'success' | 'error' } | null>(null);
   const [todayWorkout, setTodayWorkout] = useState<WorkoutDay | null>(null);
+  const [yesterdayWorkout, setYesterdayWorkout] = useState<WorkoutDay | null>(null);
   const [showSleepCheckin, setShowSleepCheckin] = useState(false);
   const [sleepSaving, setSleepSaving] = useState(false);
 
@@ -313,6 +314,9 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
 
       const { data: workoutData } = await supabase.from('workout_days').select('*').eq('date', todayISO()).order('created_at', { ascending: false }).limit(1).maybeSingle();
       setTodayWorkout(workoutData as WorkoutDay | null);
+
+      const { data: yWorkoutData } = await supabase.from('workout_days').select('*').eq('date', yesterdayISO()).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      setYesterdayWorkout(yWorkoutData as WorkoutDay | null);
 
       const syncedSteps = await trySyncFromSession();
       if (syncedSteps != null) {
@@ -431,7 +435,9 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
   const weeklyDelta = prevAvg ? recentAvg - prevAvg : 0;
 
   // ── Today's plan targets ──
-  const isTrainingDay = todayLog?.day_type === 'training' || !!todayWorkout;
+  // Day type is determined solely by whether a workout is scheduled/logged for today.
+  // The daily_logs.day_type column defaults to 'training' and is not reliable for this decision.
+  const isTrainingDay = !!todayWorkout;
   const todayCalTarget = targets
     ? targets.mode === 'split'
       ? isTrainingDay ? targets.training_calories : targets.rest_calories
@@ -476,7 +482,7 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
 
   // ── Yesterday compact ──
   const yLog = logs.find((l) => l.date === yesterdayISO()) ?? null;
-  const yIsTraining = yLog?.day_type === 'training';
+  const yIsTraining = !!yesterdayWorkout;
   const yCalTarget = targets
     ? targets.mode === 'split'
       ? yIsTraining ? targets.training_calories : targets.rest_calories
@@ -561,6 +567,11 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
             <span className="ml-auto rounded-lg border border-ink-600 bg-ink-850 px-2.5 py-1 text-xs font-semibold text-slate-400">
               {isTrainingDay ? 'Тренировочный день' : 'День отдыха'}
             </span>
+            {targets.mode === 'split' && (
+              <span className={`ml-1 rounded-lg px-2 py-1 text-xs font-bold ${isTrainingDay ? 'bg-brand-500/15 text-brand-300' : 'bg-slate-500/15 text-slate-400'}`}>
+                {todayCalTarget.toLocaleString('ru-RU')} ккал
+              </span>
+            )}
           </div>
 
           {/* Calorie target */}
@@ -579,14 +590,14 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
           </div>
 
           {/* Workout */}
-          <div className="mt-4 rounded-xl border border-ink-700 bg-ink-850 p-3.5">
+          <div className={`mt-4 rounded-xl border p-3.5 ${isTrainingDay ? 'border-brand-500/30 bg-brand-500/5' : 'border-ink-700 bg-ink-850'}`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-500/15">
-                  <Dumbbell className="h-4.5 w-4.5 text-brand-300" />
+                <div className={`flex h-9 w-9 items-center justify-center rounded-lg ${isTrainingDay ? 'bg-brand-500/15' : 'bg-slate-500/10'}`}>
+                  {isTrainingDay ? <Dumbbell className="h-4.5 w-4.5 text-brand-300" /> : <Moon className="h-4.5 w-4.5 text-slate-400" />}
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-white">{workoutName ?? 'День отдыха'}</p>
+                  <p className="text-sm font-bold text-white">{isTrainingDay ? (workoutName ?? 'Тренировка') : 'День отдыха'}</p>
                   {workoutDuration && <p className="text-xs text-slate-400">~{workoutDuration} мин</p>}
                 </div>
               </div>
@@ -594,7 +605,7 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
                 <span className="flex items-center gap-1 rounded-lg bg-emerald-500/15 px-3 py-1.5 text-xs font-bold text-emerald-400">
                   <Check className="h-3.5 w-3.5" /> Выполнено
                 </span>
-              ) : workoutName ? (
+              ) : isTrainingDay ? (
                 <button
                   onClick={onStartWorkout}
                   disabled={isDemo}
@@ -602,7 +613,9 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
                 >
                   <Play className="h-3.5 w-3.5 fill-ink-950" /> Старт
                 </button>
-              ) : null}
+              ) : (
+                <span className="rounded-lg bg-slate-500/10 px-3 py-1.5 text-xs font-bold text-slate-400">Отдых</span>
+              )}
             </div>
           </div>
 
@@ -684,14 +697,14 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
           <div className="rounded-xl border border-ink-700 bg-ink-850 p-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-400">Тренировка</span>
-              <span className={`text-[11px] font-bold ${workoutDone ? 'text-emerald-400' : todayWorkout ? 'text-amber-400' : 'text-slate-500'}`}>
-                {workoutDone ? 'Готово' : todayWorkout ? 'Не выполнено' : 'Нет'}
+              <span className={`text-[11px] font-bold ${workoutDone ? 'text-emerald-400' : isTrainingDay ? 'text-amber-400' : 'text-slate-500'}`}>
+                {workoutDone ? 'Готово' : isTrainingDay ? 'Не выполнено' : 'Отдых'}
               </span>
             </div>
             <p className="mt-1.5 text-sm font-bold text-white">
-              {workoutDone ? <span className="flex items-center gap-1"><Check className="h-4 w-4 text-emerald-400" /> Выполнено</span> : todayWorkout ? workoutName : 'Не запланирована'}
+              {workoutDone ? <span className="flex items-center gap-1"><Check className="h-4 w-4 text-emerald-400" /> Выполнено</span> : isTrainingDay ? (workoutName ?? 'Тренировка') : 'День отдыха'}
             </p>
-            {!workoutDone && todayWorkout && (
+            {!workoutDone && isTrainingDay && (
               <button onClick={onStartWorkout} disabled={isDemo} className="mt-2 flex items-center gap-1 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-bold text-ink-950 transition-transform hover:scale-[1.03] active:scale-95 disabled:opacity-50">
                 <Play className="h-3 w-3 fill-ink-950" /> Старт
               </button>
