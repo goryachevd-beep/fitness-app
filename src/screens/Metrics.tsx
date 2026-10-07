@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase';
 import type { CustomMetric, MetricLog, Profile, ProgressPhoto } from '@/lib/types';
 import { Card, Loader } from '@/components/ui';
 import { LineChart } from '@/components/LineChart';
-import { formatShortDate, todayISO } from '@/lib/calc';
+import { formatShortDate, todayISO, dedupMetricLogsByDate } from '@/lib/calc';
 
 type PeriodKey = '7D' | '2W' | '1M' | '3M' | '6M' | 'ALL';
 const PERIOD_OPTIONS: { key: PeriodKey; label: string }[] = [
@@ -190,19 +190,19 @@ export default function Metrics({ isDemo }: { isDemo: boolean }) {
   async function load() {
     if (isDemo) {
       setMetrics(DEMO_METRICS.map((m) => ({ id: m.id, name: m.name, unit: m.unit, is_active: m.is_active, order_index: m.order_index, instruction: m.instruction })));
-      setLogs(DEMO_METRICS.flatMap((m) => m.logs.map((l, i) => ({ id: `${m.id}-log-${i}`, metric_id: m.id, date: l.date, value: l.value }))));
+      setLogs(DEMO_METRICS.flatMap((m) => m.logs.map((l, i) => ({ id: `${m.id}-log-${i}`, metric_id: m.id, date: l.date, value: l.value, created_at: null }))));
       setProfile(null);
       setPhotos([]);
       return;
     }
     const [{ data: m }, { data: l }, { data: p }, { data: ph }] = await Promise.all([
       supabase.from('custom_metrics').select('*').order('order_index'),
-      supabase.from('metric_logs').select('*').order('date', { ascending: true }),
+      supabase.from('metric_logs').select('*').order('date', { ascending: true }).order('created_at', { ascending: false }),
       supabase.from('profiles').select('*').limit(1).maybeSingle(),
       supabase.from('progress_photos').select('*').order('taken_date', { ascending: true }),
     ]);
     setMetrics((m as CustomMetric[]) ?? []);
-    setLogs((l as MetricLog[]) ?? []);
+    setLogs(dedupMetricLogsByDate((l as MetricLog[]) ?? []));
     setProfile(p as Profile | null);
     setPhotos((ph as ProgressPhoto[]) ?? []);
   }
@@ -265,7 +265,7 @@ export default function Metrics({ isDemo }: { isDemo: boolean }) {
     if (!raw || Number.isNaN(value)) return;
     const { data } = await supabase
       .from('metric_logs')
-      .insert({ metric_id: m.id, date: todayISO(), value })
+      .upsert({ metric_id: m.id, date: todayISO(), value }, { onConflict: 'metric_id,date' })
       .select()
       .maybeSingle();
     if (data) setLogs((prev) => [...prev, data as MetricLog]);

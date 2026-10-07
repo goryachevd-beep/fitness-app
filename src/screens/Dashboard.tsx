@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import type { DailyLog, NutritionTargets, WorkoutDay } from '@/lib/types';
 import { Card, Loader, Toast } from '@/components/ui';
 import { LineChart } from '@/components/LineChart';
-import { todayISO, yesterdayISO } from '@/lib/calc';
+import { todayISO, yesterdayISO, dedupLogsByDate } from '@/lib/calc';
 import { initiateGoogleFitAuth, trySyncFromSession, fetchStepsForRange, getCachedProviderToken, SYNC_FLAG } from '@/lib/googleFit';
 import { useAuthUser } from '@/lib/useAuthUser';
 import { DEMO_LOGS, DEMO_TARGETS, DEMO_TODAY_WORKOUT } from '@/lib/demoData';
@@ -27,7 +27,7 @@ function mergeStepsIntoLogs(prev: DailyLog[] | null, perDay: { date: string; ste
     if (idx >= 0) {
       updated[idx] = { ...updated[idx], steps: day.steps };
     } else {
-      updated.push({ id: 'tmp', date: day.date, weight: null, steps: day.steps, sleep_quality: null, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: null, weekly_tdee: null, weekly_target_calories: null, day_type: null });
+      updated.push({ id: 'tmp', date: day.date, weight: null, steps: day.steps, sleep_quality: null, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: null, weekly_tdee: null, weekly_target_calories: null, day_type: null, created_at: new Date().toISOString() });
     }
   }
   updated.sort((a, b) => a.date.localeCompare(b.date));
@@ -80,12 +80,7 @@ function WeightModal({
     const w = Number(weight);
     if (!weight || Number.isNaN(w)) return;
     setSaving(true);
-    const { data: row } = await supabase.from('daily_logs').select('id').eq('date', date).maybeSingle();
-    if (row) {
-      await supabase.from('daily_logs').update({ weight: w }).eq('id', row.id);
-    } else {
-      await supabase.from('daily_logs').insert({ date, weight: w });
-    }
+    await supabase.from('daily_logs').upsert({ date, weight: w }, { onConflict: 'date' });
     onSaved(date, w);
     setSaving(false);
     onClose();
@@ -162,12 +157,7 @@ function NutritionModal({
     const f = Number(fats) || 0;
     const cb = Number(carbs) || 0;
     setSaving(true);
-    const { data: row } = await supabase.from('daily_logs').select('id').eq('date', date).maybeSingle();
-    if (row) {
-      await supabase.from('daily_logs').update({ calories: c, proteins: p, fats: f, carbs: cb }).eq('id', row.id);
-    } else {
-      await supabase.from('daily_logs').insert({ date, calories: c, proteins: p, fats: f, carbs: cb });
-    }
+    await supabase.from('daily_logs').upsert({ date, calories: c, proteins: p, fats: f, carbs: cb }, { onConflict: 'date' });
     onSaved(date, { calories: c, proteins: p, fats: f, carbs: cb });
     setSaving(false);
     onClose();
@@ -249,12 +239,7 @@ function StepsModal({
   async function save() {
     const s = Number(steps) || 0;
     setSaving(true);
-    const { data: row } = await supabase.from('daily_logs').select('id').eq('date', date).maybeSingle();
-    if (row) {
-      await supabase.from('daily_logs').update({ steps: s }).eq('id', row.id);
-    } else {
-      await supabase.from('daily_logs').insert({ date, steps: s });
-    }
+    await supabase.from('daily_logs').upsert({ date, steps: s }, { onConflict: 'date' });
     onSaved(date, s);
     setSaving(false);
     onClose();
@@ -323,7 +308,7 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
     (async () => {
       const { data: logData } = await supabase.from('daily_logs').select('*').order('date', { ascending: true });
       const { data: targetData } = await supabase.from('nutrition_targets').select('*').maybeSingle();
-      setLogs((logData as DailyLog[]) ?? []);
+      setLogs(dedupLogsByDate((logData as DailyLog[]) ?? []));
       setTargets(targetData as NutritionTargets | null);
 
       const { data: workoutData } = await supabase.from('workout_days').select('*').eq('date', todayISO()).order('created_at', { ascending: false }).limit(1).maybeSingle();
@@ -338,7 +323,7 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
           if (last && last.date === todayISO()) {
             updated[updated.length - 1] = { ...last, steps: syncedSteps };
           } else {
-            updated.push({ id: 'tmp', date: todayISO(), weight: null, steps: syncedSteps, sleep_quality: null, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: null, weekly_tdee: null, weekly_target_calories: null, day_type: null });
+            updated.push({ id: 'tmp', date: todayISO(), weight: null, steps: syncedSteps, sleep_quality: null, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: null, weekly_tdee: null, weekly_target_calories: null, day_type: null, created_at: new Date().toISOString() });
           }
           return updated;
         });
@@ -378,16 +363,7 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
 
   async function saveSleep(q: number) {
     if (isDemo) return;
-    const { data: existing } = await supabase
-      .from('daily_logs')
-      .select('id')
-      .eq('date', todayISO())
-      .maybeSingle();
-    if (existing) {
-      await supabase.from('daily_logs').update({ sleep_quality: q }).eq('id', existing.id);
-    } else {
-      await supabase.from('daily_logs').insert({ date: todayISO(), sleep_quality: q });
-    }
+    await supabase.from('daily_logs').upsert({ date: todayISO(), sleep_quality: q }, { onConflict: 'date' });
     setLogs((prev) => {
       if (!prev) return prev;
       const updated = [...prev];
@@ -395,7 +371,7 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
       if (last && last.date === todayISO()) {
         updated[updated.length - 1] = { ...last, sleep_quality: q };
       } else {
-        updated.push({ id: 'tmp', date: todayISO(), weight: null, steps: 0, sleep_quality: q, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: null, weekly_tdee: null, weekly_target_calories: null, day_type: null });
+        updated.push({ id: 'tmp', date: todayISO(), weight: null, steps: 0, sleep_quality: q, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: null, weekly_tdee: null, weekly_target_calories: null, day_type: null, created_at: new Date().toISOString() });
       }
       return updated;
     });
@@ -860,7 +836,7 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
             if (idx >= 0) {
               updated[idx] = { ...updated[idx], ...patch };
             } else {
-              updated.push({ id: 'tmp', date: savedDate, weight: null, steps: 0, sleep_quality: null, weight_ema: null, weekly_tdee: null, weekly_target_calories: null, day_type: null, ...patch });
+              updated.push({ id: 'tmp', date: savedDate, weight: null, steps: 0, sleep_quality: null, weight_ema: null, weekly_tdee: null, weekly_target_calories: null, day_type: null, created_at: new Date().toISOString(), ...patch });
               updated.sort((a, b) => a.date.localeCompare(b.date));
             }
             return updated;
@@ -882,7 +858,7 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
             if (idx >= 0) {
               updated[idx] = { ...updated[idx], steps: s };
             } else {
-              updated.push({ id: 'tmp', date: savedDate, weight: null, steps: s, sleep_quality: null, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: null, weekly_tdee: null, weekly_target_calories: null, day_type: null });
+              updated.push({ id: 'tmp', date: savedDate, weight: null, steps: s, sleep_quality: null, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: null, weekly_tdee: null, weekly_target_calories: null, day_type: null, created_at: new Date().toISOString() });
               updated.sort((a, b) => a.date.localeCompare(b.date));
             }
             return updated;
@@ -904,7 +880,7 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
             if (idx >= 0) {
               updated[idx] = { ...updated[idx], weight: w, weight_ema: w };
             } else {
-              updated.push({ id: 'tmp', date: savedDate, weight: w, steps: 0, sleep_quality: null, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: w, weekly_tdee: null, weekly_target_calories: null, day_type: null });
+              updated.push({ id: 'tmp', date: savedDate, weight: w, steps: 0, sleep_quality: null, calories: 0, proteins: 0, fats: 0, carbs: 0, weight_ema: w, weekly_tdee: null, weekly_target_calories: null, day_type: null, created_at: new Date().toISOString() });
               updated.sort((a, b) => a.date.localeCompare(b.date));
             }
             return updated;

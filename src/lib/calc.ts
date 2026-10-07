@@ -46,3 +46,41 @@ export function youtubeEmbed(url: string | null): string | null {
   const match = url.match(/(?:v=|youtu\.be\/)([\w-]{11})/);
   return match ? `https://www.youtube.com/embed/${match[1]}` : url;
 }
+
+// Keep only the latest row per date (by created_at DESC, then id as tiebreaker).
+// Sorts input by date ASC so callers can rely on chronological order.
+export function dedupLogsByDate<T extends { date: string; created_at?: string | null; id: string }>(logs: T[]): T[] {
+  const byDate = new Map<string, T>();
+  for (const log of logs) {
+    const existing = byDate.get(log.date);
+    if (!existing) {
+      byDate.set(log.date, log);
+    } else {
+      const exTime = existing.created_at ? new Date(existing.created_at).getTime() : 0;
+      const curTime = log.created_at ? new Date(log.created_at).getTime() : 0;
+      if (curTime >= exTime) {
+        byDate.set(log.date, log);
+      }
+    }
+  }
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// Keep only the latest row per (metric_id, date).
+export function dedupMetricLogsByDate<T extends { metric_id: string; date: string; created_at?: string | null; id: string }>(logs: T[]): T[] {
+  const byKey = new Map<string, T>();
+  for (const log of logs) {
+    const key = `${log.metric_id}|${log.date}`;
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, log);
+    } else {
+      const exTime = existing.created_at ? new Date(existing.created_at).getTime() : 0;
+      const curTime = log.created_at ? new Date(log.created_at).getTime() : 0;
+      if (curTime >= exTime) {
+        byKey.set(key, log);
+      }
+    }
+  }
+  return [...byKey.values()];
+}

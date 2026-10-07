@@ -31,6 +31,7 @@ export interface DailyLog {
   weekly_tdee: number | null;
   weekly_target_calories: number | null;
   day_type: 'training' | 'rest' | null;
+  created_at: string | null;
 }
 
 export interface Exercise {
@@ -145,6 +146,7 @@ export interface MetricLog {
   metric_id: string;
   date: string;
   value: number;
+  created_at: string | null;
 }
 
 export interface ChatThread {

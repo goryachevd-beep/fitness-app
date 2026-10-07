@@ -5,6 +5,7 @@ import type { DailyLog, NutritionTargets } from '@/lib/types';
 import { Card, Loader } from '@/components/ui';
 import { AnalyticsMatrix } from '@/components/AnalyticsMatrix';
 import { DEMO_LOGS, DEMO_TARGETS } from '@/lib/demoData';
+import { dedupLogsByDate } from '@/lib/calc';
 
 function TargetsModal({ open, onClose, targets, onSaved }: { open: boolean; onClose: () => void; targets: NutritionTargets | null; onSaved: (t: NutritionTargets) => void }) {
   const [form, setForm] = useState<NutritionTargets | null>(targets);
@@ -115,7 +116,7 @@ export default function Nutrition({ isDemo }: { isDemo: boolean }) {
     (async () => {
       const { data: logData } = await supabase.from('daily_logs').select('*').order('date', { ascending: true });
       const { data: targetData } = await supabase.from('nutrition_targets').select('*').maybeSingle();
-      setLogs((logData as DailyLog[]) ?? []);
+      setLogs(dedupLogsByDate((logData as DailyLog[]) ?? []));
       setTargets(targetData as NutritionTargets | null);
     })();
   }, [isDemo]);
