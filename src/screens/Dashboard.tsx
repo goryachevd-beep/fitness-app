@@ -19,6 +19,24 @@ function getDayIndex(date: Date, length: number): number {
   return ((daysSinceEpoch % length) + length) % length;
 }
 
+type InsightLog = Pick<DailyLog, 'date' | 'weight' | 'calories' | 'proteins' | 'fats' | 'carbs' | 'steps' | 'sleep_quality'>;
+
+function localDateISO(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function rusDay(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 14) return 'дней';
+  if (mod10 === 1) return 'день';
+  if (mod10 >= 2 && mod10 <= 4) return 'дня';
+  return 'дней';
+}
+
 function mergeStepsIntoLogs(prev: DailyLog[] | null, perDay: { date: string; steps: number }[]): DailyLog[] | null {
   if (!prev) return prev;
   const updated = [...prev];
@@ -292,6 +310,7 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
   const [yesterdayWorkout, setYesterdayWorkout] = useState<WorkoutDay | null>(null);
   const [showSleepCheckin, setShowSleepCheckin] = useState(false);
   const [sleepSaving, setSleepSaving] = useState(false);
+  const [allLogs, setAllLogs] = useState<InsightLog[] | null>(null);
 
   useEffect(() => {
     if (!toast) return;
@@ -311,6 +330,9 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
       const { data: targetData } = await supabase.from('nutrition_targets').select('*').maybeSingle();
       setLogs(dedupLogsByDate((logData as DailyLog[]) ?? []));
       setTargets(targetData as NutritionTargets | null);
+
+      const { data: insightData } = await supabase.from('daily_logs').select('date,weight,calories,proteins,fats,carbs,steps,sleep_quality').order('date', { ascending: false }).limit(500);
+      setAllLogs((insightData as InsightLog[]) ?? []);
 
       const { data: workoutData } = await supabase.from('workout_days').select('*').eq('date', todayISO()).order('created_at', { ascending: false }).limit(1).maybeSingle();
       setTodayWorkout(workoutData as WorkoutDay | null);
@@ -497,36 +519,54 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
   const todayDateLabel = new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
   const todayQuote = MOTIVATIONAL_QUOTES[getDayIndex(new Date(), MOTIVATIONAL_QUOTES.length)];
 
-  const insightMessage = (() => {
-    if (hour >= 20 && today.date === todayISO()) {
+  const insight = (() => {
+    if (isDemo) return { text: '🔥 12 дней подряд с записью — не останавливайся!', tone: 'streak' as const };
+
+    const now = new Date();
+    const hour = now.getHours();
+    const todayStr = todayISO();
+    const todayEntry = logs.find((l) => l.date === todayStr) ?? null;
+
+    // 1. Evening reminder
+    if (hour >= 20) {
       const missing: string[] = [];
-      if (today.weight == null) missing.push('вес');
-      if (today.sleep_quality == null) missing.push('сон');
-      if (today.calories === 0) missing.push('калории');
-      if (missing.length > 0) {
-        return `Не забудь отметить ${missing.join(' и ')} сегодня`;
-      }
+      if (!todayEntry?.calories) missing.push('питание');
+      if (todayEntry?.sleep_quality == null) missing.push('сон');
+      if (todayEntry?.weight == null) missing.push('вес');
+      if (!todayEntry?.steps) missing.push('шаги');
+
+      if (missing.length >= 3) return { text: 'Не забудь внести данные за сегодня', tone: 'reminder' as const };
+      if (missing.length === 2) return { text: `Не забудь внести ${missing[0]} и ${missing[1]} за сегодня`, tone: 'reminder' as const };
+      if (missing.length === 1) return { text: `Не забудь внести ${missing[0]} за сегодня`, tone: 'reminder' as const };
     }
-    if (emaData.length >= 14 && weeklyDelta <= -0.3) {
-      return `💪 ${Math.abs(weeklyDelta).toFixed(1)} кг за 2 недели — отличная динамика!`;
-    }
+
+    // 2. Weight trend praise — goal mode field not available in schema, skip
+
+    // 3. Streak
+    const hasEntry = (l: { weight: number | null; calories: number; steps: number; sleep_quality: number | null } | undefined): boolean => {
+      if (!l) return false;
+      return l.weight != null || l.calories > 0 || l.steps > 0 || l.sleep_quality != null;
+    };
+
+    const logMap = new Map<string, boolean>();
+    for (const l of (allLogs ?? [])) logMap.set(l.date, hasEntry(l));
+    for (const l of logs) logMap.set(l.date, hasEntry(l));
+
+    const todayHasEntry = logMap.get(todayStr) ?? false;
+    const cursor = new Date();
+    if (!todayHasEntry) cursor.setDate(cursor.getDate() - 1);
+
     let streak = 0;
-    for (let i = logs.length - 1; i >= 1; i--) {
-      const cur = new Date(logs[i].date);
-      const prev = new Date(logs[i - 1].date);
-      cur.setHours(0, 0, 0, 0);
-      prev.setHours(0, 0, 0, 0);
-      const diff = Math.round((cur.getTime() - prev.getTime()) / 86400000);
-      if (diff === 1) {
-        streak++;
-      } else {
-        break;
-      }
+    while (logMap.get(localDateISO(cursor))) {
+      streak++;
+      cursor.setDate(cursor.getDate() - 1);
     }
+
     if (streak >= 2) {
-      return `🔥 ${streak + 1} дней подряд с записью — не останавливайся!`;
+      return { text: `🔥 ${streak} ${rusDay(streak)} подряд с записью — не останавливайся!`, tone: 'streak' as const };
     }
-    return '';
+
+    return null;
   })();
 
   function statusLabel(pct: number): string {
@@ -544,7 +584,7 @@ export default function Dashboard({ onStartWorkout, isDemo }: { onStartWorkout: 
           <p className="text-sm text-slate-400">{greeting},</p>
           <h1 className="text-2xl font-extrabold text-white">{user?.displayName ?? 'Гость'}</h1>
           <p className="mt-0.5 text-sm capitalize text-slate-500">{todayDateLabel}</p>
-          {insightMessage && <p className="mt-1 text-sm text-brand-300/80">{insightMessage}</p>}
+          {insight && <p className={`mt-1 text-sm ${insight.tone === 'reminder' ? 'text-amber-400/80' : 'text-brand-300/80'}`}>{insight.text}</p>}
         </div>
         {!isDemo && (
           <button
